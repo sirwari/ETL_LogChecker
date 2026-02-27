@@ -70,6 +70,13 @@ TOOL_VERSION = "0.3.0"
 EPOCH_SEC_MIN = 946684800  # 2000-01-01
 EPOCH_SEC_MAX = 2524608000  # 2050-01-01
 
+TIME_SCALE_UNITS = {
+    "ns": 1e-9,
+    "us": 1e-6,
+    "ms": 1e-3,
+    "s": 1.0,
+}
+
 
 def _infer_timestamp_scale(value: float) -> float:
     if value >= 1e12:
@@ -84,6 +91,49 @@ def _infer_timestamp_scale(value: float) -> float:
     if value >= 1e6:
         return 1e-3
     return 1.0
+
+
+def _parse_time_scale_arg(value: str | None) -> float | None:
+    if value is None:
+        return None
+    text = value.strip().lower()
+    if text in ("", "auto"):
+        return None
+    if text in TIME_SCALE_UNITS:
+        return TIME_SCALE_UNITS[text]
+    try:
+        scale = float(text)
+    except Exception as exc:
+        raise ValueError("Invalid time-scale value") from exc
+    if not math.isfinite(scale) or scale <= 0:
+        raise ValueError("Time scale must be a positive number")
+    return scale
+
+
+def _stringify_guid(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    data1 = getattr(value, "data1", None)
+    data2 = getattr(value, "data2", None)
+    data3 = getattr(value, "data3", None)
+    data4 = getattr(value, "data4", None)
+    if data1 is not None and data2 is not None and data3 is not None and data4 is not None:
+        try:
+            data4_bytes = list(data4)
+            if len(data4_bytes) >= 8:
+                return (
+                    f"{int(data1):08x}-{int(data2):04x}-{int(data3):04x}-"
+                    f"{data4_bytes[0]:02x}{data4_bytes[1]:02x}-"
+                    f"{''.join(f'{b:02x}' for b in data4_bytes[2:8])}"
+                )
+        except Exception:
+            pass
+    try:
+        return str(value)
+    except Exception:
+        return None
 
 
 def _read_perf_counter_scale(etl_path: str) -> float | None:
@@ -145,6 +195,10 @@ class TimestampScaler:
         if self._scale is None:
             self._scale = _infer_timestamp_scale(value)
         return value * self._scale
+
+    @property
+    def current_scale(self) -> float | None:
+        return self._scale
 
 
 class P2Quantile:
@@ -316,6 +370,29 @@ class ETLAnalyzer:
         self._providers_seen = {"process": False, "network": False}
         self._timestamp_scale: float | None = timestamp_scale
         self._last_timestamp: float | None = None
+        self._network_bin_s: float | None = None
+        self._network_bins: dict[int, dict[str, int]] = defaultdict(
+            lambda: {"sent": 0, "recv": 0}
+        )
+
+    def enable_network_trends(self, bin_s: float) -> None:
+        self._network_bin_s = max(0.001, float(bin_s))
+        self._network_bins = defaultdict(lambda: {"sent": 0, "recv": 0})
+
+    def network_trends(self) -> list[dict[str, float]]:
+        if self._network_bin_s is None:
+            return []
+        rows = []
+        for idx in sorted(self._network_bins.keys()):
+            bucket = self._network_bins[idx]
+            rows.append(
+                {
+                    "time_s": idx * self._network_bin_s,
+                    "sent_bytes": float(bucket.get("sent", 0)),
+                    "recv_bytes": float(bucket.get("recv", 0)),
+                }
+            )
+        return rows
 
     def analyze(self, xml_output: str | None = None) -> list[dict[str, Any]]:
         xml_writer = XmlEventWriter(xml_output) if xml_output else None
@@ -847,10 +924,18 @@ class ETLAnalyzer:
         if size is None:
             return
 
+        timestamp = self._scaled_timestamp(event)
+
         if "send" in event_text:
             self.net_sent_by_pid[pid] += size
+            if self._network_bin_s and timestamp is not None:
+                idx = int(timestamp / self._network_bin_s)
+                self._network_bins[idx]["sent"] += size
         elif "recv" in event_text or "receive" in event_text:
             self.net_recv_by_pid[pid] += size
+            if self._network_bin_s and timestamp is not None:
+                idx = int(timestamp / self._network_bin_s)
+                self._network_bins[idx]["recv"] += size
         else:
             self.net_unknown_by_pid[pid] += size
 
@@ -934,6 +1019,27 @@ class ETLAnalyzer:
             "Time",
         )
         process_id = self._event_field(event, "ProcessID", "ProcessId", "PID")
+
+        try:
+            from etl.event import Event as EtlEvent  # type: ignore
+        except Exception:
+            EtlEvent = None
+
+        if EtlEvent is not None and isinstance(event, EtlEvent):
+            try:
+                guid = _stringify_guid(event.source.event_header.provider_id)
+                if guid:
+                    provider_guid = guid
+            except Exception:
+                provider_guid = provider_guid
+            try:
+                timestamp = event.get_timestamp()
+            except Exception:
+                timestamp = timestamp
+            try:
+                process_id = event.get_process_id()
+            except Exception:
+                process_id = process_id
 
         event_data: dict[str, Any] = {}
         if isinstance(event, dict):
@@ -1105,6 +1211,9 @@ class ETLUXAnalyzer:
         debug: bool = False,
         progress_every: int = 200_000,
         timestamp_scale: float | None = None,
+        time_scale_source: str = "auto",
+        bootlog: bool = False,
+        boot_window_s: float = 300.0,
     ) -> None:
         self.etl_path = etl_path
         self.slow_io_ms = slow_io_ms
@@ -1112,6 +1221,9 @@ class ETLUXAnalyzer:
         self.debug = debug
         self.progress_every = progress_every
         self._scaler = TimestampScaler(scale=timestamp_scale)
+        self.time_scale_source = time_scale_source
+        self.bootlog_enabled = bootlog
+        self.boot_window_s = boot_window_s
 
         self.start_ts: float | None = None
         self.end_ts: float | None = None
@@ -1155,6 +1267,8 @@ class ETLUXAnalyzer:
             "explorer_start_s": None,
             "first_user_app_s": None,
         }
+        self.boot_order: list[dict[str, Any]] = []
+        self._boot_order_seen: set[int] = set()
 
         self.system_allowlist = {
             "smss.exe",
@@ -1272,6 +1386,21 @@ class ETLUXAnalyzer:
                 and self.boot_milestones["first_user_app_s"] is None
             ):
                 self.boot_milestones["first_user_app_s"] = rel_ts
+            if (
+                self.bootlog_enabled
+                and rel_ts <= self.boot_window_s
+                and pid not in self._boot_order_seen
+            ):
+                self._boot_order_seen.add(pid)
+                self.boot_order.append(
+                    {
+                        "pid": pid,
+                        "image": image or "Unknown",
+                        "session_id": session_id,
+                        "parent_id": parent_id,
+                        "start_s": rel_ts,
+                    }
+                )
 
         if is_end and rel_ts is not None:
             self.pid_end_ts[pid] = rel_ts
@@ -1550,20 +1679,37 @@ class ETLUXAnalyzer:
             reverse=True,
         )[: self.top_n]
 
+        boot_data = dict(self.boot_milestones)
+        if self.bootlog_enabled:
+            milestone_values = [
+                ts for ts in boot_data.values() if isinstance(ts, (int, float))
+            ]
+            boot_duration = boot_data.get("explorer_start_s")
+            if boot_duration is None and milestone_values:
+                boot_duration = max(milestone_values)
+            boot_data["boot_duration_s"] = boot_duration
+            boot_data["boot_order"] = sorted(
+                self.boot_order, key=lambda r: r.get("start_s") or 0.0
+            )[: self.top_n]
+
+        metadata = {
+            "etl_path": self.etl_path,
+            "generated_at": dt.datetime.utcnow().isoformat() + "Z",
+            "tool_version": TOOL_VERSION,
+            "slow_io_ms": self.slow_io_ms,
+            "timestamp_scale": self._scaler.current_scale,
+            "time_scale_source": self.time_scale_source,
+        }
+
         metrics = {
-            "metadata": {
-                "etl_path": self.etl_path,
-                "generated_at": dt.datetime.utcnow().isoformat() + "Z",
-                "tool_version": TOOL_VERSION,
-                "slow_io_ms": self.slow_io_ms,
-            },
+            "metadata": metadata,
             "trace": {
                 "start_ts": self.start_ts,
                 "end_ts": self.end_ts,
                 "duration_s": trace_duration,
                 "event_count": self.event_count,
             },
-            "boot": self.boot_milestones,
+            "boot": boot_data,
             "launch_latency": {
                 "top": launch_top,
                 "stats": latency_stats,
@@ -1589,6 +1735,140 @@ class ETLUXAnalyzer:
         }
 
         return metrics
+
+
+def _build_timeline_rows(
+    pid_start_ts: dict[int, float],
+    pid_end_ts: dict[int, float],
+    pid_info: dict[int, dict[str, Any]],
+    pid_first_io_ts: dict[int, float],
+    pid_first_image_ts: dict[int, float],
+    trace_duration: float,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for pid, start_ts in pid_start_ts.items():
+        info = pid_info.get(pid, {})
+        end_ts = pid_end_ts.get(pid, trace_duration)
+        duration = None if end_ts is None else max(0.0, end_ts - start_ts)
+        rows.append(
+            {
+                "pid": pid,
+                "image": info.get("image", "Unknown"),
+                "session_id": info.get("session_id"),
+                "parent_id": info.get("parent_id"),
+                "command_line": info.get("command_line"),
+                "start_s": start_ts,
+                "end_s": end_ts,
+                "duration_s": duration,
+                "first_io_s": pid_first_io_ts.get(pid),
+                "first_image_s": pid_first_image_ts.get(pid),
+            }
+        )
+    rows.sort(key=lambda r: (r["start_s"] is None, r["start_s"]))
+    return rows
+
+
+def _write_timeline_output(
+    rows: list[dict[str, Any]],
+    output_path: str,
+    fmt: str,
+) -> None:
+    if fmt == "json":
+        with open(output_path, "w", encoding="utf-8") as handle:
+            json.dump(rows, handle, indent=2)
+        return
+    if fmt == "csv":
+        fieldnames = [
+            "pid",
+            "image",
+            "session_id",
+            "parent_id",
+            "command_line",
+            "start_s",
+            "end_s",
+            "duration_s",
+            "first_io_s",
+            "first_image_s",
+        ]
+        with open(output_path, "w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fieldnames)
+            writer.writeheader()
+            for row in rows:
+                writer.writerow(row)
+        return
+    raise ValueError(f"Unsupported timeline format: {fmt}")
+
+
+def _collect_network_trends(
+    etl_path: str,
+    bin_s: float,
+    timestamp_scale: float | None,
+    debug: bool,
+    tracerpt_exe: str | None,
+    use_tracerpt: bool,
+    use_etl_observer: bool,
+    force_etl_observer: bool,
+) -> list[dict[str, float]]:
+    analyzer = ETLAnalyzer(
+        etl_path,
+        tracerpt_exe=tracerpt_exe,
+        use_tracerpt=use_tracerpt,
+        debug=debug,
+        use_etl_observer=use_etl_observer,
+        force_etl_observer=force_etl_observer,
+        timestamp_scale=timestamp_scale,
+    )
+    analyzer.enable_network_trends(bin_s)
+    analyzer.analyze()
+    return analyzer.network_trends()
+
+
+def _write_network_throughput_plot(
+    trends: list[dict[str, float]],
+    plot_dir: str,
+) -> str | None:
+    if not trends:
+        return None
+    try:
+        import matplotlib.pyplot as plt  # type: ignore
+    except Exception:
+        print(
+            "matplotlib is not installed; skipping plot generation.",
+            file=sys.stderr,
+        )
+        return None
+
+    os.makedirs(plot_dir, exist_ok=True)
+    times = [row["time_s"] for row in trends]
+    sent = [row["sent_bytes"] for row in trends]
+    recv = [row["recv_bytes"] for row in trends]
+
+    plt.figure(figsize=(9, 4.5))
+    plt.plot(times, sent, label="Sent bytes")
+    plt.plot(times, recv, label="Recv bytes")
+    plt.xlabel("Time (s)")
+    plt.ylabel("Bytes per bin")
+    plt.title("Network throughput")
+    plt.legend()
+    plt.tight_layout()
+
+    path = os.path.join(plot_dir, "network_throughput.png")
+    plt.savefig(path, dpi=160)
+    plt.close()
+    return path
+
+
+def _derive_baseline_metrics_path(
+    metrics_path: str | None, report_path: str | None
+) -> str:
+    if metrics_path:
+        root, ext = os.path.splitext(metrics_path)
+        ext = ext or ".json"
+        return f"{root}_baseline{ext}"
+    if report_path:
+        report_dir = os.path.dirname(report_path) or "."
+        return os.path.join(report_dir, "etl_metrics_baseline.json")
+    return "etl_metrics_baseline.json"
 
 
 def _sort_rows(rows: list[dict[str, Any]], sort_key: str) -> list[dict[str, Any]]:
@@ -1849,6 +2129,10 @@ def _compare_metrics(current: dict[str, Any], baseline: dict[str, Any]) -> dict[
             get_path(current, "boot", "explorer_start_s"),
             get_path(baseline, "boot", "explorer_start_s"),
         ),
+        "boot_duration_s": (
+            get_path(current, "boot", "boot_duration_s"),
+            get_path(baseline, "boot", "boot_duration_s"),
+        ),
     }
 
     deltas = {}
@@ -1862,11 +2146,18 @@ def _compare_metrics(current: dict[str, Any], baseline: dict[str, Any]) -> dict[
     return deltas
 
 
-def _render_report(metrics: dict[str, Any], baseline: dict[str, Any] | None = None) -> str:
+def _render_report(
+    metrics: dict[str, Any],
+    baseline: dict[str, Any] | None = None,
+    plot_paths: dict[str, str] | None = None,
+) -> str:
     boot = metrics.get("boot", {})
+    boot_order = boot.get("boot_order", []) or []
+    boot_duration = boot.get("boot_duration_s")
     io = metrics.get("io", {})
     io_percentiles = io.get("percentiles_s", {})
     comparison = _compare_metrics(metrics, baseline) if baseline else None
+    plot_paths = plot_paths or {}
 
     slow_pct = io.get("slow_time_pct", 0.0) * 100.0
     duration_s = metrics.get("trace", {}).get("duration_s", 0.0) or 0.0
@@ -1886,6 +2177,7 @@ def _render_report(metrics: dict[str, Any], baseline: dict[str, Any] | None = No
             ("I/O p95", "io_p95_s", _format_seconds),
             ("I/O p99", "io_p99_s", _format_seconds),
             ("Explorer start", "explorer_start_s", _format_seconds),
+            ("Boot duration", "boot_duration_s", _format_seconds),
         ):
             entry = comparison.get(key, {})
             cur = entry.get("current")
@@ -1964,6 +2256,47 @@ def _render_report(metrics: dict[str, Any], baseline: dict[str, Any] | None = No
         ["p95", _format_seconds(io_percentiles.get("p95_s"))],
         ["p99", _format_seconds(io_percentiles.get("p99_s"))],
     ]
+
+    boot_summary = (
+        f'<div class="subtitle">Boot duration: {_format_seconds(boot_duration)}</div>'
+        if boot_duration is not None
+        else ""
+    )
+    boot_order_rows = [
+        [
+            item.get("image", "Unknown"),
+            str(item.get("pid", "")),
+            str(item.get("session_id", "")),
+            _format_seconds(item.get("start_s")),
+        ]
+        for item in boot_order
+    ]
+    boot_order_block = ""
+    if boot_order_rows:
+        boot_order_block = (
+            '<div class="subtitle">Boot order (first '
+            + str(len(boot_order_rows))
+            + ")</div>"
+            + _render_table(
+                ["Image", "PID", "Session", "Start"], boot_order_rows
+            )
+        )
+
+    plot_cards = []
+    if plot_paths.get("network_throughput"):
+        plot_cards.append(
+            '<div class="plot-card"><div class="plot-title">Network throughput</div>'
+            f'<img class="plot-image" src="{_html_escape(plot_paths["network_throughput"])}" '
+            'alt="Network throughput" /></div>'
+        )
+    plots_html = ""
+    if plot_cards:
+        plots_html = (
+            '<div class="section"><h2>Trends</h2>'
+            '<div class="plot-grid">'
+            + "".join(plot_cards)
+            + "</div></div>"
+        )
 
     html = f"""
 <!DOCTYPE html>
@@ -2090,6 +2423,30 @@ def _render_report(metrics: dict[str, Any], baseline: dict[str, Any] | None = No
       color: var(--muted);
       font-variant-numeric: tabular-nums;
     }}
+    .plot-grid {{
+      display: grid;
+      gap: 16px;
+    }}
+    .plot-card {{
+      background: #f7f9ff;
+      border-radius: 16px;
+      padding: 16px;
+      border: 1px solid #e3e7f0;
+    }}
+    .plot-title {{
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }}
+    .plot-image {{
+      width: 100%;
+      height: auto;
+      display: block;
+      border-radius: 12px;
+      background: #ffffff;
+    }}
     .chart-label {{
       font-size: 10px;
       fill: var(--muted);
@@ -2114,9 +2471,13 @@ def _render_report(metrics: dict[str, Any], baseline: dict[str, Any] | None = No
 
     {f'<div class="section"><h2>Comparison to baseline</h2>{_render_table(["Metric", "Current", "Baseline", "Delta", "Delta %"], comparison_rows)}</div>' if comparison else ''}
 
+    {plots_html}
+
     <div class="section">
       <h2>Boot timeline</h2>
+      {boot_summary}
       {_render_timeline(boot)}
+      {boot_order_block}
     </div>
 
     <div class="section">
@@ -2185,9 +2546,45 @@ def main() -> int:
     )
     parser.add_argument("--report", help="Write a self-contained HTML report to path")
     parser.add_argument("--metrics-output", help="Write metrics JSON to path")
-    parser.add_argument("--compare", help="Compare against a baseline metrics JSON file")
+    compare_group = parser.add_mutually_exclusive_group()
+    compare_group.add_argument(
+        "--compare", help="Compare against a baseline metrics JSON file"
+    )
+    compare_group.add_argument(
+        "--compare-etl", help="Compare against a baseline ETL file"
+    )
     parser.add_argument("--slow-io-ms", type=int, default=50, help="Slow I/O threshold in ms")
     parser.add_argument("--top-n", type=int, default=10, help="Top N rows in report sections")
+    parser.add_argument(
+        "--time-scale",
+        default="auto",
+        help="Timestamp scale override (auto|ns|us|ms|s|float seconds per tick)",
+    )
+    parser.add_argument("--timeline-output", help="Write process timeline to path")
+    parser.add_argument(
+        "--timeline-format",
+        choices=["csv", "json"],
+        default="json",
+        help="Timeline output format (default: json)",
+    )
+    parser.add_argument("--plot-dir", help="Write matplotlib plots to this directory")
+    parser.add_argument(
+        "--plot-bin-s",
+        type=float,
+        default=1.0,
+        help="Time bin size for plots in seconds (default: 1.0)",
+    )
+    parser.add_argument(
+        "--bootlog",
+        action="store_true",
+        help="Enable bootlog-specific metrics and report sections",
+    )
+    parser.add_argument(
+        "--boot-window-s",
+        type=float,
+        default=300.0,
+        help="Boot window length for boot order capture (default: 300s)",
+    )
     parser.add_argument(
         "--ux-progress-every",
         type=int,
@@ -2207,15 +2604,48 @@ def main() -> int:
     if not os.path.isfile(args.etl_path):
         print(f"ETL file not found: {args.etl_path}", file=sys.stderr)
         return 1
+    if args.compare_etl and not os.path.isfile(args.compare_etl):
+        print(f"Baseline ETL file not found: {args.compare_etl}", file=sys.stderr)
+        return 1
 
-    timestamp_scale = _read_perf_counter_scale(args.etl_path)
+    try:
+        override_scale = _parse_time_scale_arg(args.time_scale)
+    except ValueError as exc:
+        print(f"Invalid --time-scale: {exc}", file=sys.stderr)
+        return 1
+    if args.plot_bin_s <= 0:
+        print("--plot-bin-s must be greater than 0.", file=sys.stderr)
+        return 1
+    if args.boot_window_s <= 0:
+        print("--boot-window-s must be greater than 0.", file=sys.stderr)
+        return 1
 
-    ux_required = bool(args.report or args.metrics_output or args.compare)
+    time_scale_source = "auto"
+    if override_scale is not None:
+        timestamp_scale = override_scale
+        time_scale_source = "override"
+    else:
+        timestamp_scale = _read_perf_counter_scale(args.etl_path)
+        if timestamp_scale is not None:
+            time_scale_source = "perf_freq"
+
+    ux_required = bool(
+        args.report
+        or args.metrics_output
+        or args.compare
+        or args.compare_etl
+        or args.timeline_output
+        or args.plot_dir
+        or args.bootlog
+    )
     if ux_required:
         metrics_path = args.metrics_output
+        report_path = args.report
+        if args.compare_etl and not report_path:
+            report_path = "report_compare.html"
         if not metrics_path:
-            if args.report:
-                report_dir = os.path.dirname(args.report) or "."
+            if report_path:
+                report_dir = os.path.dirname(report_path) or "."
                 metrics_path = os.path.join(report_dir, "etl_metrics.json")
             else:
                 metrics_path = "etl_metrics.json"
@@ -2227,6 +2657,9 @@ def main() -> int:
             debug=args.debug,
             progress_every=args.ux_progress_every,
             timestamp_scale=timestamp_scale,
+            time_scale_source=time_scale_source,
+            bootlog=args.bootlog,
+            boot_window_s=args.boot_window_s,
         )
         try:
             metrics = ux.analyze()
@@ -2252,10 +2685,75 @@ def main() -> int:
             except OSError as exc:
                 print(f"Failed to read baseline metrics: {exc}", file=sys.stderr)
                 return 1
+        elif args.compare_etl:
+            baseline_ux = ETLUXAnalyzer(
+                args.compare_etl,
+                slow_io_ms=args.slow_io_ms,
+                top_n=args.top_n,
+                debug=args.debug,
+                progress_every=args.ux_progress_every,
+                timestamp_scale=timestamp_scale,
+                time_scale_source=time_scale_source,
+                bootlog=args.bootlog,
+                boot_window_s=args.boot_window_s,
+            )
+            try:
+                baseline = baseline_ux.analyze()
+            except OSError as exc:
+                print(f"Failed to read baseline ETL: {exc}", file=sys.stderr)
+                return 1
+            except RuntimeError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            except Exception as exc:  # pragma: no cover - unexpected
+                print(f"Unhandled error: {exc}", file=sys.stderr)
+                return 1
+            baseline_metrics_path = _derive_baseline_metrics_path(
+                metrics_path, report_path
+            )
+            with open(baseline_metrics_path, "w", encoding="utf-8") as handle:
+                json.dump(baseline, handle, indent=2)
 
-        if args.report:
-            report_html = _render_report(metrics, baseline)
-            with open(args.report, "w", encoding="utf-8") as handle:
+        if args.timeline_output:
+            trace_duration = metrics.get("trace", {}).get("duration_s") or 0.0
+            timeline_rows = _build_timeline_rows(
+                ux.pid_start_ts,
+                ux.pid_end_ts,
+                ux.pid_info,
+                ux.pid_first_io_ts,
+                ux.pid_first_image_ts,
+                trace_duration,
+            )
+            try:
+                _write_timeline_output(
+                    timeline_rows, args.timeline_output, args.timeline_format
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+        plot_paths: dict[str, str] = {}
+        if args.plot_dir:
+            trends = _collect_network_trends(
+                args.etl_path,
+                args.plot_bin_s,
+                timestamp_scale,
+                args.debug,
+                args.tracerpt_exe,
+                not args.no_tracerpt,
+                not args.no_etl_observer,
+                args.force_etl_observer,
+            )
+            plot_path = _write_network_throughput_plot(trends, args.plot_dir)
+            if plot_path and report_path:
+                report_dir = os.path.dirname(report_path) or "."
+                plot_paths["network_throughput"] = os.path.relpath(
+                    plot_path, report_dir
+                )
+
+        if report_path:
+            report_html = _render_report(metrics, baseline, plot_paths)
+            with open(report_path, "w", encoding="utf-8") as handle:
                 handle.write(report_html)
 
         return 0
