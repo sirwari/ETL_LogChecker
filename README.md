@@ -65,6 +65,31 @@ python etl_logchecker.py <path-to-etl> --plot-dir plots
 python etl_logchecker.py <path-to-etl> --bootlog --boot-window-s 300
 ```
 
+### Demo calls
+Bootlog-focused HTML + metrics + timeline:
+```bash
+python etl_logchecker.py bootLog.etl \
+  --bootlog --boot-window-s 300 \
+  --report boot_report.html \
+  --metrics-output boot_metrics.json \
+  --timeline-output boot_timeline.csv --timeline-format csv
+```
+
+Compare two ETLs with plots:
+```bash
+python etl_logchecker.py current.etl \
+  --compare-etl baseline.etl \
+  --report report_compare.html \
+  --plot-dir plots
+```
+
+Force time-scale and export timeline JSON:
+```bash
+python etl_logchecker.py trace.etl \
+  --time-scale 1e-7 \
+  --timeline-output timeline.json --timeline-format json
+```
+
 ### Options
 - `--output <path>`: write output to a file (default: stdout)
 - `--xml-output <path>`: write a full XML event dump to a file
@@ -90,6 +115,35 @@ python etl_logchecker.py <path-to-etl> --bootlog --boot-window-s 300
 - `--boot-window-s <n>`: boot window length for boot order capture (default: 300)
 - `--ux-progress-every <n>`: log UX analysis progress every N events (debug only)
 - `--debug`: verbose logging
+
+## MCP Server
+This repo includes an MCP server that exposes ETL analysis + comparison tools over stdio.
+
+Start the server:
+```bash
+python etl_mcp_server.py
+```
+
+Example MCP client config:
+```json
+{
+  "mcpServers": {
+    "etl-logchecker": {
+      "command": "python",
+      "args": ["/Users/zogthein/ETL_LogChecker/etl_mcp_server.py"]
+    }
+  }
+}
+```
+
+Available tools:
+- `analyze_etl`
+- `compare_metrics`
+- `review_metrics`
+
+Ollama environment variables (optional):
+- `OLLAMA_HOST` (default: `http://localhost:11434`)
+- `OLLAMA_MODEL` (default: `gptoss20b`)
 
 ## Output Columns
 - `PID`

@@ -1,0 +1,377 @@
+{
+  "metadata": {
+    "etl_path": "/Users/zogthein/ETL_LogChecker/Baseline.etl",
+    "generated_at": "2026-02-27T09:27:37.050195Z",
+    "tool_version": "0.3.0",
+    "slow_io_ms": 50
+  },
+  "trace": {
+    "start_ts": 2699.0559875999998,
+    "end_ts": 3827.7469975,
+    "duration_s": 1128.6910099000002,
+    "event_count": 118899508
+  },
+  "boot": {
+    "boot_start_s": 0.0,
+    "smss_start_s": 0.5350949000003311,
+    "wininit_start_s": 0.5354317000001174,
+    "winlogon_start_s": 0.5358046000001195,
+    "logonui_start_s": null,
+    "explorer_start_s": 0.5779618000001392,
+    "first_user_app_s": 0.5470441000002211
+  },
+  "launch_latency": {
+    "top": [
+      {
+        "pid": 184,
+        "image": "Registry",
+        "session_id": 4294967295,
+        "startup_latency_s": 8.281696700000339,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 10324,
+        "image": "wpr.exe",
+        "session_id": 1,
+        "startup_latency_s": 0.23645170000008875,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 14360,
+        "image": "DataExchangeHost.exe",
+        "session_id": 1,
+        "startup_latency_s": 0.1831398999997873,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 14812,
+        "image": "backgroundTaskHost.exe",
+        "session_id": 1,
+        "startup_latency_s": 0.16486889999987397,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 10236,
+        "image": "wpr.exe",
+        "session_id": 1,
+        "startup_latency_s": 0.15678799999977855,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 9536,
+        "image": "wpr.exe",
+        "session_id": 1,
+        "startup_latency_s": 0.14108579999992799,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 11936,
+        "image": "ms-teamsupdate.exe",
+        "session_id": 1,
+        "startup_latency_s": 0.12350259999993796,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 5788,
+        "image": "taskhostw.exe",
+        "session_id": 1,
+        "startup_latency_s": 0.07369509999989532,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 3752,
+        "image": "dllhost.exe",
+        "session_id": 1,
+        "startup_latency_s": 0.07245439999996961,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 7892,
+        "image": "taskhostw.exe",
+        "session_id": 1,
+        "startup_latency_s": 0.06272190000026967,
+        "first_signal": "disk_io"
+      }
+    ],
+    "stats": {
+      "count": 84,
+      "p50_s": 6.73000004098867e-05,
+      "p95_s": 0.14108579999992799,
+      "p99_s": 0.23645170000008875
+    }
+  },
+  "io": {
+    "total_ops": 204489,
+    "total_bytes": 29850809856.0,
+    "slow_ops": 1,
+    "slow_time_s": 0.0663931,
+    "slow_time_pct": 5.882309632809275e-05,
+    "percentiles_s": {
+      "p50_s": 9.529831803843059e-05,
+      "p95_s": 0.002274737560772075,
+      "p99_s": 0.013484192687555994
+    },
+    "histogram": {
+      "<= 0.5 ms": 64345,
+      "<= 1 ms": 314,
+      "<= 0.1 ms": 115786,
+      "<= 2 ms": 17689,
+      "<= 10 ms": 2578,
+      "<= 5 ms": 948,
+      "<= 20 ms": 2785,
+      "<= 50 ms": 43,
+      "<= 100 ms": 1
+    }
+  },
+  "top_processes": {
+    "by_slow_time": [
+      {
+        "pid": 12156,
+        "image": "SecurityHealthService.exe",
+        "slow_time_s": 0.0663931,
+        "slow_ops": 1
+      },
+      {
+        "pid": 4464,
+        "image": "svchost.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 5996,
+        "image": "Dell.Update.SubAgent.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 9124,
+        "image": "SearchIndexer.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 3548,
+        "image": "DellSupportAssistRemedationService.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 13672,
+        "image": "wuaucltcore.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 10920,
+        "image": "MsMpEng.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 15920,
+        "image": "Notepad.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 7940,
+        "image": "SupportAssistAgent.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 4,
+        "image": "System",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      }
+    ],
+    "by_slow_ops": [
+      {
+        "pid": 12156,
+        "image": "SecurityHealthService.exe",
+        "slow_ops": 1,
+        "slow_time_s": 0.0663931
+      },
+      {
+        "pid": 4464,
+        "image": "svchost.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 5996,
+        "image": "Dell.Update.SubAgent.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 9124,
+        "image": "SearchIndexer.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 3548,
+        "image": "DellSupportAssistRemedationService.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 13672,
+        "image": "wuaucltcore.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 10920,
+        "image": "MsMpEng.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 15920,
+        "image": "Notepad.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 7940,
+        "image": "SupportAssistAgent.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 4,
+        "image": "System",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      }
+    ],
+    "by_io_bytes": [
+      {
+        "pid": 4,
+        "image": "System",
+        "io_bytes": 28714529280.0,
+        "io_ops": 187158
+      },
+      {
+        "pid": 13672,
+        "image": "wuaucltcore.exe",
+        "io_bytes": 806349312.0,
+        "io_ops": 6247
+      },
+      {
+        "pid": 10920,
+        "image": "MsMpEng.exe",
+        "io_bytes": 165406720.0,
+        "io_ops": 4856
+      },
+      {
+        "pid": 6092,
+        "image": "TiWorker.exe",
+        "io_bytes": 23122432.0,
+        "io_ops": 480
+      },
+      {
+        "pid": 184,
+        "image": "Registry",
+        "io_bytes": 20951040.0,
+        "io_ops": 551
+      },
+      {
+        "pid": 3256,
+        "image": "svchost.exe",
+        "io_bytes": 13725696.0,
+        "io_ops": 220
+      },
+      {
+        "pid": 1204,
+        "image": "lsass.exe",
+        "io_bytes": 12070912.0,
+        "io_ops": 84
+      },
+      {
+        "pid": 10844,
+        "image": "LogonUI.exe",
+        "io_bytes": 7535616.0,
+        "io_ops": 488
+      },
+      {
+        "pid": 4456,
+        "image": "svchost.exe",
+        "io_bytes": 7262208.0,
+        "io_ops": 629
+      },
+      {
+        "pid": 8036,
+        "image": "explorer.exe",
+        "io_bytes": 6923264.0,
+        "io_ops": 521
+      }
+    ]
+  },
+  "top_files": [],
+  "process_lifetimes": [
+    {
+      "pid": 1048,
+      "image": "powershell.exe",
+      "session_id": 1,
+      "lifetime_s": 1127.9589643
+    },
+    {
+      "pid": 5744,
+      "image": "svchost.exe",
+      "session_id": 0,
+      "lifetime_s": 1127.9584614999999
+    },
+    {
+      "pid": 15920,
+      "image": "Notepad.exe",
+      "session_id": 1,
+      "lifetime_s": 1127.9583572000001
+    },
+    {
+      "pid": 15572,
+      "image": "conhost.exe",
+      "session_id": 1,
+      "lifetime_s": 1127.9582143000002
+    },
+    {
+      "pid": 5400,
+      "image": "dllhost.exe",
+      "session_id": 1,
+      "lifetime_s": 1127.9563751
+    },
+    {
+      "pid": 15856,
+      "image": "dllhost.exe",
+      "session_id": 1,
+      "lifetime_s": 1127.9562897
+    },
+    {
+      "pid": 7336,
+      "image": "RuntimeBroker.exe",
+      "session_id": 1,
+      "lifetime_s": 1127.9561291999999
+    },
+    {
+      "pid": 320,
+      "image": "backgroundTaskHost.exe",
+      "session_id": 1,
+      "lifetime_s": 1127.9560923999998
+    },
+    {
+      "pid": 13820,
+      "image": "WUDFHost.exe",
+      "session_id": 0,
+      "lifetime_s": 1127.9552736
+    },
+    {
+      "pid": 412,
+      "image": "vds.exe",
+      "session_id": 0,
+      "lifetime_s": 1127.9551831000003
+    }
+  ]
+}

@@ -1,0 +1,376 @@
+{
+  "metadata": {
+    "etl_path": "ZO05N008K6.02-25-2026.12-33-08.etl",
+    "generated_at": "2026-02-26T09:45:10.863905Z",
+    "tool_version": "0.3.0",
+    "slow_io_ms": 50
+  },
+  "trace": {
+    "start_ts": 81434760477.0,
+    "end_ts": 82624758372.0,
+    "duration_s": 1189997895.0,
+    "event_count": 137268078
+  },
+  "boot": {
+    "boot_start_s": 0.0,
+    "smss_start_s": 1235628.0,
+    "wininit_start_s": 1238356.0,
+    "winlogon_start_s": 1240560.0,
+    "logonui_start_s": null,
+    "explorer_start_s": 1815736.0,
+    "first_user_app_s": 1451138.0
+  },
+  "launch_latency": {
+    "top": [
+      {
+        "pid": 328,
+        "image": "Registry",
+        "session_id": 4294967295,
+        "startup_latency_s": 52285297.0,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 5404,
+        "image": "FileCoAuth.exe",
+        "session_id": 2,
+        "startup_latency_s": 13489088.0,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 25948,
+        "image": "backgroundTaskHost.exe",
+        "session_id": 2,
+        "startup_latency_s": 11428010.0,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 7924,
+        "image": "RuntimeBroker.exe",
+        "session_id": 2,
+        "startup_latency_s": 11095326.0,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 15032,
+        "image": "OUTLOOK.EXE",
+        "session_id": 2,
+        "startup_latency_s": 9256491.0,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 18624,
+        "image": "backgroundTaskHost.exe",
+        "session_id": 2,
+        "startup_latency_s": 9234706.0,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 14836,
+        "image": "backgroundTaskHost.exe",
+        "session_id": 2,
+        "startup_latency_s": 9105470.0,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 23140,
+        "image": "dllhost.exe",
+        "session_id": 2,
+        "startup_latency_s": 8638234.0,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 4,
+        "image": "System",
+        "session_id": 4294967295,
+        "startup_latency_s": 6158918.0,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 7828,
+        "image": "backgroundTaskHost.exe",
+        "session_id": 2,
+        "startup_latency_s": 3793818.0,
+        "first_signal": "disk_io"
+      }
+    ],
+    "stats": {
+      "count": 112,
+      "p50_s": 575.0,
+      "p95_s": 9105470.0,
+      "p99_s": 11428010.0
+    }
+  },
+  "io": {
+    "total_ops": 57405,
+    "total_bytes": 13109932032.0,
+    "slow_ops": 0,
+    "slow_time_s": 0.0,
+    "slow_time_pct": 0.0,
+    "percentiles_s": {
+      "p50_s": 0.00010163957627321942,
+      "p95_s": 0.0002935227408045862,
+      "p99_s": 0.00040817956056616895
+    },
+    "histogram": {
+      "<= 2 ms": 135,
+      "<= 5 ms": 105,
+      "<= 0.5 ms": 27475,
+      "<= 0.1 ms": 29004,
+      "<= 1 ms": 589,
+      "<= 20 ms": 39,
+      "<= 50 ms": 11,
+      "<= 10 ms": 47
+    }
+  },
+  "top_processes": {
+    "by_slow_time": [
+      {
+        "pid": 5520,
+        "image": "WmiPrvSE.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 10236,
+        "image": "WPRUI.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 6032,
+        "image": "nxtsessions.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 4876,
+        "image": "nxtsvc.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 25280,
+        "image": "ms-teams.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 4,
+        "image": "System",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 7572,
+        "image": "MsSense.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 10976,
+        "image": "svchost.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 2688,
+        "image": "ms-teams.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 7492,
+        "image": "cyserver.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      }
+    ],
+    "by_slow_ops": [
+      {
+        "pid": 5520,
+        "image": "WmiPrvSE.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 10236,
+        "image": "WPRUI.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 6032,
+        "image": "nxtsessions.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 4876,
+        "image": "nxtsvc.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 25280,
+        "image": "ms-teams.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 4,
+        "image": "System",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 7572,
+        "image": "MsSense.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 10976,
+        "image": "svchost.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 2688,
+        "image": "ms-teams.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 7492,
+        "image": "cyserver.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      }
+    ],
+    "by_io_bytes": [
+      {
+        "pid": 4,
+        "image": "System",
+        "io_bytes": 12519822848.0,
+        "io_ops": 33818
+      },
+      {
+        "pid": 15032,
+        "image": "OUTLOOK.EXE",
+        "io_bytes": 163562496.0,
+        "io_ops": 10571
+      },
+      {
+        "pid": 7492,
+        "image": "cyserver.exe",
+        "io_bytes": 122387456.0,
+        "io_ops": 1745
+      },
+      {
+        "pid": 13576,
+        "image": "SearchIndexer.exe",
+        "io_bytes": 79062528.0,
+        "io_ops": 3640
+      },
+      {
+        "pid": 19472,
+        "image": "msedgewebview2.exe",
+        "io_bytes": 45875712.0,
+        "io_ops": 1658
+      },
+      {
+        "pid": 7732,
+        "image": "MsMpEng.exe",
+        "io_bytes": 30615552.0,
+        "io_ops": 750
+      },
+      {
+        "pid": 20992,
+        "image": "ai.exe",
+        "io_bytes": 13503488.0,
+        "io_ops": 57
+      },
+      {
+        "pid": 2716,
+        "image": "svchost.exe",
+        "io_bytes": 12976128.0,
+        "io_ops": 199
+      },
+      {
+        "pid": 14520,
+        "image": "tlaworker.exe",
+        "io_bytes": 11882496.0,
+        "io_ops": 26
+      },
+      {
+        "pid": 12972,
+        "image": "SearchFilterHost.exe",
+        "io_bytes": 10142208.0,
+        "io_ops": 177
+      }
+    ]
+  },
+  "top_files": [],
+  "process_lifetimes": [
+    {
+      "pid": 10236,
+      "image": "WPRUI.exe",
+      "session_id": 2,
+      "lifetime_s": 1187561773.0
+    },
+    {
+      "pid": 16328,
+      "image": "pacjsworker.exe",
+      "session_id": 0,
+      "lifetime_s": 1187557995.0
+    },
+    {
+      "pid": 17888,
+      "image": "pacjsworker.exe",
+      "session_id": 0,
+      "lifetime_s": 1187556141.0
+    },
+    {
+      "pid": 17556,
+      "image": "svchost.exe",
+      "session_id": 0,
+      "lifetime_s": 1187554996.0
+    },
+    {
+      "pid": 17204,
+      "image": "svchost.exe",
+      "session_id": 2,
+      "lifetime_s": 1187552089.0
+    },
+    {
+      "pid": 18532,
+      "image": "nxthostapp.exe",
+      "session_id": 2,
+      "lifetime_s": 1187551412.0
+    },
+    {
+      "pid": 17260,
+      "image": "audiodg.exe",
+      "session_id": 0,
+      "lifetime_s": 1187549388.0
+    },
+    {
+      "pid": 8760,
+      "image": "conhost.exe",
+      "session_id": 2,
+      "lifetime_s": 1187548882.0
+    },
+    {
+      "pid": 25108,
+      "image": "cmd.exe",
+      "session_id": 2,
+      "lifetime_s": 1187546404.0
+    },
+    {
+      "pid": 18960,
+      "image": "msedge.exe",
+      "session_id": 2,
+      "lifetime_s": 1187545456.0
+    }
+  ]
+}

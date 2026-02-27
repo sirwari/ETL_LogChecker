@@ -1,0 +1,505 @@
+{
+  "metadata": {
+    "etl_path": "bootLog.etl",
+    "generated_at": "2026-02-27T13:49:53.449511Z",
+    "tool_version": "0.3.0",
+    "slow_io_ms": 50,
+    "timestamp_scale": 1e-07,
+    "time_scale_source": "perf_freq"
+  },
+  "trace": {
+    "start_ts": 0.6640244,
+    "end_ts": 164.2976669,
+    "duration_s": 163.6336425,
+    "event_count": 64173879
+  },
+  "boot": {
+    "boot_start_s": 0.0,
+    "smss_start_s": 2.3304546999999998,
+    "wininit_start_s": 9.1508256,
+    "winlogon_start_s": 9.2028419,
+    "logonui_start_s": null,
+    "explorer_start_s": 45.036957599999994,
+    "first_user_app_s": 0.05464429999999998,
+    "boot_duration_s": 45.036957599999994,
+    "boot_order": [
+      {
+        "pid": 0,
+        "image": "Idle",
+        "session_id": 4294967295,
+        "parent_id": 0,
+        "start_s": 0.05464429999999998
+      },
+      {
+        "pid": 4,
+        "image": "System",
+        "session_id": 4294967295,
+        "parent_id": 0,
+        "start_s": 0.05465350000000002
+      },
+      {
+        "pid": 140,
+        "image": "Secure System",
+        "session_id": 4294967295,
+        "parent_id": 4,
+        "start_s": 0.05479149999999999
+      },
+      {
+        "pid": 184,
+        "image": "Registry",
+        "session_id": 4294967295,
+        "parent_id": 4,
+        "start_s": 0.05479290000000003
+      },
+      {
+        "pid": 780,
+        "image": "smss.exe",
+        "session_id": 4294967295,
+        "parent_id": 4,
+        "start_s": 2.3304546999999998
+      },
+      {
+        "pid": 820,
+        "image": "autochk.exe",
+        "session_id": 4294967295,
+        "parent_id": 780,
+        "start_s": 2.6794459
+      },
+      {
+        "pid": 944,
+        "image": "smss.exe",
+        "session_id": 0,
+        "parent_id": 780,
+        "start_s": 3.3378614000000004
+      },
+      {
+        "pid": 1040,
+        "image": "csrss.exe",
+        "session_id": 0,
+        "parent_id": 944,
+        "start_s": 8.8036132
+      },
+      {
+        "pid": 1120,
+        "image": "smss.exe",
+        "session_id": 1,
+        "parent_id": 780,
+        "start_s": 9.149494699999998
+      },
+      {
+        "pid": 1128,
+        "image": "wininit.exe",
+        "session_id": 0,
+        "parent_id": 944,
+        "start_s": 9.1508256
+      }
+    ]
+  },
+  "launch_latency": {
+    "top": [
+      {
+        "pid": 12852,
+        "image": "DeviceEnroller.exe",
+        "session_id": 1,
+        "startup_latency_s": 74.1823545,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 15484,
+        "image": "RuntimeBroker.exe",
+        "session_id": 1,
+        "startup_latency_s": 58.00453470000001,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 15540,
+        "image": "msedgewebview2.exe",
+        "session_id": 1,
+        "startup_latency_s": 22.483655800000008,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 16484,
+        "image": "cmd.exe",
+        "session_id": 1,
+        "startup_latency_s": 19.740875399999993,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 13748,
+        "image": "backgroundTaskHost.exe",
+        "session_id": 1,
+        "startup_latency_s": 10.3053855,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 10492,
+        "image": "backgroundTaskHost.exe",
+        "session_id": 1,
+        "startup_latency_s": 9.769290799999993,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 15748,
+        "image": "wlrmdr.exe",
+        "session_id": 1,
+        "startup_latency_s": 7.8944884,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 13936,
+        "image": "FileCoAuth.exe",
+        "session_id": 1,
+        "startup_latency_s": 7.1844125000000005,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 15524,
+        "image": "msedgewebview2.exe",
+        "session_id": 1,
+        "startup_latency_s": 6.812720100000007,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 13280,
+        "image": "taskhostw.exe",
+        "session_id": 1,
+        "startup_latency_s": 6.233025699999999,
+        "first_signal": "disk_io"
+      }
+    ],
+    "stats": {
+      "count": 79,
+      "p50_s": 1.3637047999999936,
+      "p95_s": 10.3053855,
+      "p99_s": 58.00453470000001
+    }
+  },
+  "io": {
+    "total_ops": 169532,
+    "total_bytes": 16069234176.0,
+    "slow_ops": 80,
+    "slow_time_s": 7.6191954000000015,
+    "slow_time_pct": 0.04656252396263807,
+    "percentiles_s": {
+      "p50_s": 0.000182710532871119,
+      "p95_s": 0.0018743347740298886,
+      "p99_s": 0.009179931853988622
+    },
+    "histogram": {
+      "<= 0.5 ms": 139818,
+      "<= 0.1 ms": 21530,
+      "<= 5 ms": 1204,
+      "<= 1 ms": 3703,
+      "<= 2 ms": 1315,
+      "<= 10 ms": 749,
+      "<= 20 ms": 702,
+      "<= 50 ms": 431,
+      "<= 200 ms": 25,
+      "<= 100 ms": 52,
+      "<= 500 ms": 3
+    }
+  },
+  "top_processes": {
+    "by_slow_time": [
+      {
+        "pid": 3788,
+        "image": "taskhostw.exe",
+        "slow_time_s": 1.5355394,
+        "slow_ops": 19
+      },
+      {
+        "pid": 4528,
+        "image": "svchost.exe",
+        "slow_time_s": 1.0023706,
+        "slow_ops": 8
+      },
+      {
+        "pid": 8096,
+        "image": "DeviceEnroller.exe",
+        "slow_time_s": 0.7026737,
+        "slow_ops": 8
+      },
+      {
+        "pid": 184,
+        "image": "Registry",
+        "slow_time_s": 0.6187086,
+        "slow_ops": 6
+      },
+      {
+        "pid": 8104,
+        "image": "DeviceEnroller.exe",
+        "slow_time_s": 0.4796952,
+        "slow_ops": 6
+      },
+      {
+        "pid": 3820,
+        "image": "dxgiadaptercache.exe",
+        "slow_time_s": 0.44102549999999996,
+        "slow_ops": 5
+      },
+      {
+        "pid": 4,
+        "image": "System",
+        "slow_time_s": 0.3844767,
+        "slow_ops": 1
+      },
+      {
+        "pid": 13440,
+        "image": "msedgewebview2.exe",
+        "slow_time_s": 0.3792202,
+        "slow_ops": 2
+      },
+      {
+        "pid": 4996,
+        "image": "dsregcmd.exe",
+        "slow_time_s": 0.29391449999999997,
+        "slow_ops": 4
+      },
+      {
+        "pid": 12412,
+        "image": "taskhostw.exe",
+        "slow_time_s": 0.2298631,
+        "slow_ops": 3
+      }
+    ],
+    "by_slow_ops": [
+      {
+        "pid": 3788,
+        "image": "taskhostw.exe",
+        "slow_ops": 19,
+        "slow_time_s": 1.5355394
+      },
+      {
+        "pid": 4528,
+        "image": "svchost.exe",
+        "slow_ops": 8,
+        "slow_time_s": 1.0023706
+      },
+      {
+        "pid": 8096,
+        "image": "DeviceEnroller.exe",
+        "slow_ops": 8,
+        "slow_time_s": 0.7026737
+      },
+      {
+        "pid": 184,
+        "image": "Registry",
+        "slow_ops": 6,
+        "slow_time_s": 0.6187086
+      },
+      {
+        "pid": 8104,
+        "image": "DeviceEnroller.exe",
+        "slow_ops": 6,
+        "slow_time_s": 0.4796952
+      },
+      {
+        "pid": 3820,
+        "image": "dxgiadaptercache.exe",
+        "slow_ops": 5,
+        "slow_time_s": 0.44102549999999996
+      },
+      {
+        "pid": 4996,
+        "image": "dsregcmd.exe",
+        "slow_ops": 4,
+        "slow_time_s": 0.29391449999999997
+      },
+      {
+        "pid": 12412,
+        "image": "taskhostw.exe",
+        "slow_ops": 3,
+        "slow_time_s": 0.2298631
+      },
+      {
+        "pid": 6668,
+        "image": "cyserver.exe",
+        "slow_ops": 2,
+        "slow_time_s": 0.1382591
+      },
+      {
+        "pid": 13440,
+        "image": "msedgewebview2.exe",
+        "slow_ops": 2,
+        "slow_time_s": 0.3792202
+      }
+    ],
+    "by_io_bytes": [
+      {
+        "pid": 4,
+        "image": "System",
+        "io_bytes": 12979506688.0,
+        "io_ops": 57160
+      },
+      {
+        "pid": 6668,
+        "image": "cyserver.exe",
+        "io_bytes": 512047104.0,
+        "io_ops": 10966
+      },
+      {
+        "pid": 14984,
+        "image": "msedgewebview2.exe",
+        "io_bytes": 316643840.0,
+        "io_ops": 1783
+      },
+      {
+        "pid": 184,
+        "image": "Registry",
+        "io_bytes": 157776896.0,
+        "io_ops": 1605
+      },
+      {
+        "pid": 13148,
+        "image": "ZSATray.exe",
+        "io_bytes": 117796352.0,
+        "io_ops": 5274
+      },
+      {
+        "pid": 7140,
+        "image": "MsMpEng.exe",
+        "io_bytes": 110871040.0,
+        "io_ops": 2857
+      },
+      {
+        "pid": 3968,
+        "image": "nxtsvc.exe",
+        "io_bytes": 88775168.0,
+        "io_ops": 16301
+      },
+      {
+        "pid": 11988,
+        "image": "explorer.exe",
+        "io_bytes": 76837376.0,
+        "io_ops": 3775
+      },
+      {
+        "pid": 1820,
+        "image": "dwm.exe",
+        "io_bytes": 76629504.0,
+        "io_ops": 3721
+      },
+      {
+        "pid": 6736,
+        "image": "IntelAudioService.exe",
+        "io_bytes": 73200640.0,
+        "io_ops": 2032
+      }
+    ]
+  },
+  "top_files": [
+    {
+      "file": "\\Device\\HarddiskVolume1\\EFI\\Microsoft\\Boot\\BCD",
+      "slow_time_s": 0.5124393,
+      "slow_ops": 5
+    },
+    {
+      "file": "\\Device\\HarddiskVolume3\\Windows\\System32\\fcon.dll",
+      "slow_time_s": 0.4173267,
+      "slow_ops": 5
+    },
+    {
+      "file": "\\Device\\HarddiskVolume3\\Windows\\SystemApps\\MicrosoftWindows.Client.CBS_cw5n1h2txyewy\\SearchUx.UI.dll",
+      "slow_time_s": 0.39465439999999996,
+      "slow_ops": 1
+    },
+    {
+      "file": "\\Device\\HarddiskVolume3\\ProgramData\\Cyvera\\LocalSystem\\Download\\cwp_compliance\\default\\rules\\compliance\\host\\configuration\\ensure-scan-all-downloads-and-attachments\\rule.py",
+      "slow_time_s": 0.3844767,
+      "slow_ops": 1
+    },
+    {
+      "file": "\\Device\\HarddiskVolume3\\Windows\\System32\\dmcmnutils.dll",
+      "slow_time_s": 0.3376618,
+      "slow_ops": 4
+    },
+    {
+      "file": "\\Device\\HarddiskVolume3\\Windows\\System32\\dcsvc.dll",
+      "slow_time_s": 0.2529652,
+      "slow_ops": 3
+    },
+    {
+      "file": "\\Device\\HarddiskVolume3\\Windows\\System32\\config\\TxR\\{2ad83873-efea-11ee-a54d-000d3a94eaa1}.TxR.4.regtrans-ms",
+      "slow_time_s": 0.24237789999999998,
+      "slow_ops": 3
+    },
+    {
+      "file": "\\Device\\HarddiskVolume3\\Windows\\System32\\dsreg.dll",
+      "slow_time_s": 0.23783809999999997,
+      "slow_ops": 3
+    },
+    {
+      "file": "\\Device\\HarddiskVolume3\\Windows\\System32\\TpmCoreProvisioning.dll",
+      "slow_time_s": 0.22599819999999998,
+      "slow_ops": 2
+    },
+    {
+      "file": "\\Device\\HarddiskVolume3\\Windows\\System32\\dmenterprisediagnostics.dll",
+      "slow_time_s": 0.21705750000000001,
+      "slow_ops": 2
+    }
+  ],
+  "process_lifetimes": [
+    {
+      "pid": 184,
+      "image": "Registry",
+      "session_id": 4294967295,
+      "lifetime_s": 163.21185920000002
+    },
+    {
+      "pid": 4,
+      "image": "System",
+      "session_id": 4294967295,
+      "lifetime_s": 163.2117838
+    },
+    {
+      "pid": 140,
+      "image": "Secure System",
+      "session_id": 4294967295,
+      "lifetime_s": 163.2116882
+    },
+    {
+      "pid": 0,
+      "image": "Idle",
+      "session_id": 4294967295,
+      "lifetime_s": 163.0721483
+    },
+    {
+      "pid": 780,
+      "image": "smss.exe",
+      "session_id": 4294967295,
+      "lifetime_s": 160.93640390000002
+    },
+    {
+      "pid": 1040,
+      "image": "csrss.exe",
+      "session_id": 0,
+      "lifetime_s": 154.4694426
+    },
+    {
+      "pid": 1120,
+      "image": "smss.exe",
+      "session_id": 1,
+      "lifetime_s": 154.19196240000002
+    },
+    {
+      "pid": 1128,
+      "image": "wininit.exe",
+      "session_id": 0,
+      "lifetime_s": 154.12265770000002
+    },
+    {
+      "pid": 1136,
+      "image": "csrss.exe",
+      "session_id": 1,
+      "lifetime_s": 154.11919120000002
+    },
+    {
+      "pid": 1196,
+      "image": "winlogon.exe",
+      "session_id": 1,
+      "lifetime_s": 154.0779243
+    }
+  ]
+}

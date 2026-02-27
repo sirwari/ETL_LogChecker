@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ETL UX/Performance Report</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f6fb;
+      --card: #ffffff;
+      --text: #141b2d;
+      --muted: #5c677d;
+      --accent: #2e6bff;
+      --accent-soft: #e7efff;
+    }
+    body {
+      margin: 0;
+      font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      background: radial-gradient(circle at top, #ffffff, var(--bg));
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 32px 24px 80px;
+    }
+    h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+    h2 {
+      margin-top: 32px;
+      font-size: 20px;
+    }
+    .subtitle {
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+    .card {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 8px 20px rgba(20, 27, 45, 0.08);
+    }
+    .card h3 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+    .card .value {
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .section {
+      background: var(--card);
+      border-radius: 18px;
+      padding: 20px;
+      margin-top: 20px;
+      box-shadow: 0 10px 26px rgba(20, 27, 45, 0.07);
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      text-align: left;
+      padding: 8px;
+      border-bottom: 1px solid #e3e7f0;
+    }
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+    }
+    .empty {
+      color: var(--muted);
+      padding: 8px 0;
+    }
+    .timeline {
+      display: grid;
+      gap: 12px;
+    }
+    .timeline-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 8px;
+    }
+    .timeline-item {
+      display: grid;
+      grid-template-columns: 12px 1fr auto;
+      align-items: center;
+      column-gap: 8px;
+      font-size: 12px;
+    }
+    .timeline-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+    .timeline-label {
+      font-weight: 600;
+    }
+    .timeline-time {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .plot-grid {
+      display: grid;
+      gap: 16px;
+    }
+    .plot-card {
+      background: #f7f9ff;
+      border-radius: 16px;
+      padding: 16px;
+      border: 1px solid #e3e7f0;
+    }
+    .plot-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+    .plot-image {
+      width: 100%;
+      height: auto;
+      display: block;
+      border-radius: 12px;
+      background: #ffffff;
+    }
+    .chart-label {
+      font-size: 10px;
+      fill: var(--muted);
+    }
+    .chart-value {
+      font-size: 10px;
+      fill: var(--text);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>ETL UX & Performance Report</h1>
+    <div class="subtitle">Generated 2026-02-27T13:49:53.449511Z • bootLog.etl</div>
+
+    <div class="cards">
+      <div class="card"><h3>Trace duration</h3><div class="value">2.73 min</div></div>
+      <div class="card"><h3>Slow I/O time</h3><div class="value">7.62 s</div></div>
+      <div class="card"><h3>Slow I/O %</h3><div class="value">4.66%</div></div>
+      <div class="card"><h3>I/O p95</h3><div class="value">1.9 ms</div></div>
+    </div>
+
+    
+
+    
+
+    <div class="section">
+      <h2>Boot timeline</h2>
+      <div class="subtitle">Boot duration: 45.04 s</div>
+      <div class="timeline"><svg viewBox="0 0 760 100"><line x1="40" y1="50.0" x2="720" y2="50.0" stroke="#8892a6" stroke-width="2" /><circle cx="75.2" cy="50.0" r="6" fill="#2e6bff" /><circle cx="178.2" cy="50.0" r="6" fill="#24a28a" /><circle cx="179.0" cy="50.0" r="6" fill="#ff8a2d" /><circle cx="720.0" cy="50.0" r="6" fill="#c056d6" /><circle cx="40.8" cy="50.0" r="6" fill="#f05365" /></svg><ul class="timeline-list"><li class="timeline-item"><span class="timeline-dot" style="background:#2e6bff;"></span><span class="timeline-label">SMSS</span><span class="timeline-time">2.33 s</span></li><li class="timeline-item"><span class="timeline-dot" style="background:#24a28a;"></span><span class="timeline-label">Wininit</span><span class="timeline-time">9.15 s</span></li><li class="timeline-item"><span class="timeline-dot" style="background:#ff8a2d;"></span><span class="timeline-label">Winlogon</span><span class="timeline-time">9.20 s</span></li><li class="timeline-item"><span class="timeline-dot" style="background:#c056d6;"></span><span class="timeline-label">Explorer</span><span class="timeline-time">45.04 s</span></li><li class="timeline-item"><span class="timeline-dot" style="background:#f05365;"></span><span class="timeline-label">First user app</span><span class="timeline-time">54.6 ms</span></li></ul></div>
+      <div class="subtitle">Boot order (first 10)</div><table><thead><tr><th>Image</th><th>PID</th><th>Session</th><th>Start</th></tr></thead><tbody><tr><td>Idle</td><td>0</td><td>4294967295</td><td>54.6 ms</td></tr><tr><td>System</td><td>4</td><td>4294967295</td><td>54.7 ms</td></tr><tr><td>Secure System</td><td>140</td><td>4294967295</td><td>54.8 ms</td></tr><tr><td>Registry</td><td>184</td><td>4294967295</td><td>54.8 ms</td></tr><tr><td>smss.exe</td><td>780</td><td>4294967295</td><td>2.33 s</td></tr><tr><td>autochk.exe</td><td>820</td><td>4294967295</td><td>2.68 s</td></tr><tr><td>smss.exe</td><td>944</td><td>0</td><td>3.34 s</td></tr><tr><td>csrss.exe</td><td>1040</td><td>0</td><td>8.80 s</td></tr><tr><td>smss.exe</td><td>1120</td><td>1</td><td>9.15 s</td></tr><tr><td>wininit.exe</td><td>1128</td><td>0</td><td>9.15 s</td></tr></tbody></table>
+    </div>
+
+    <div class="section">
+      <h2>App launch latency (proxy)</h2>
+      <svg viewBox="0 0 720 320"><defs><linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2e6bff"/><stop offset="100%" stop-color="#5aa1ff"/></linearGradient></defs><rect x="0" y="0" width="720" height="320" fill="none"/><rect x="40.0" y="40.0" width="44.8" height="240.0" rx="4" fill="url(#barGradient)"/><text x="62.4" y="312" text-anchor="middle" class="chart-label">DeviceEnroller.exe</text><text x="62.4" y="34.0" text-anchor="middle" class="chart-value">74.18s</text><rect x="104.0" y="92.3" width="44.8" height="187.7" rx="4" fill="url(#barGradient)"/><text x="126.4" y="312" text-anchor="middle" class="chart-label">RuntimeBroker.exe</text><text x="126.4" y="86.3" text-anchor="middle" class="chart-value">58.00s</text><rect x="168.0" y="207.3" width="44.8" height="72.7" rx="4" fill="url(#barGradient)"/><text x="190.4" y="312" text-anchor="middle" class="chart-label">msedgewebview2.exe</text><text x="190.4" y="201.3" text-anchor="middle" class="chart-value">22.48s</text><rect x="232.0" y="216.1" width="44.8" height="63.9" rx="4" fill="url(#barGradient)"/><text x="254.4" y="312" text-anchor="middle" class="chart-label">cmd.exe</text><text x="254.4" y="210.1" text-anchor="middle" class="chart-value">19.74s</text><rect x="296.0" y="246.7" width="44.8" height="33.3" rx="4" fill="url(#barGradient)"/><text x="318.4" y="312" text-anchor="middle" class="chart-label">backgroundTaskHost.exe</text><text x="318.4" y="240.7" text-anchor="middle" class="chart-value">10.31s</text><rect x="360.0" y="248.4" width="44.8" height="31.6" rx="4" fill="url(#barGradient)"/><text x="382.4" y="312" text-anchor="middle" class="chart-label">backgroundTaskHost.exe</text><text x="382.4" y="242.4" text-anchor="middle" class="chart-value">9.77s</text><rect x="424.0" y="254.5" width="44.8" height="25.5" rx="4" fill="url(#barGradient)"/><text x="446.4" y="312" text-anchor="middle" class="chart-label">wlrmdr.exe</text><text x="446.4" y="248.5" text-anchor="middle" class="chart-value">7.89s</text><rect x="488.0" y="256.8" width="44.8" height="23.2" rx="4" fill="url(#barGradient)"/><text x="510.4" y="312" text-anchor="middle" class="chart-label">FileCoAuth.exe</text><text x="510.4" y="250.8" text-anchor="middle" class="chart-value">7.18s</text><rect x="552.0" y="258.0" width="44.8" height="22.0" rx="4" fill="url(#barGradient)"/><text x="574.4" y="312" text-anchor="middle" class="chart-label">msedgewebview2.exe</text><text x="574.4" y="252.0" text-anchor="middle" class="chart-value">6.81s</text><rect x="616.0" y="259.8" width="44.8" height="20.2" rx="4" fill="url(#barGradient)"/><text x="638.4" y="312" text-anchor="middle" class="chart-label">taskhostw.exe</text><text x="638.4" y="253.8" text-anchor="middle" class="chart-value">6.23s</text></svg>
+      <table><thead><tr><th>Image</th><th>PID</th><th>Session</th><th>Latency</th><th>First signal</th></tr></thead><tbody><tr><td>DeviceEnroller.exe</td><td>12852</td><td>1</td><td>1.24 min</td><td>disk_io</td></tr><tr><td>RuntimeBroker.exe</td><td>15484</td><td>1</td><td>58.00 s</td><td>disk_io</td></tr><tr><td>msedgewebview2.exe</td><td>15540</td><td>1</td><td>22.48 s</td><td>disk_io</td></tr><tr><td>cmd.exe</td><td>16484</td><td>1</td><td>19.74 s</td><td>disk_io</td></tr><tr><td>backgroundTaskHost.exe</td><td>13748</td><td>1</td><td>10.31 s</td><td>disk_io</td></tr><tr><td>backgroundTaskHost.exe</td><td>10492</td><td>1</td><td>9.77 s</td><td>disk_io</td></tr><tr><td>wlrmdr.exe</td><td>15748</td><td>1</td><td>7.89 s</td><td>disk_io</td></tr><tr><td>FileCoAuth.exe</td><td>13936</td><td>1</td><td>7.18 s</td><td>disk_io</td></tr><tr><td>msedgewebview2.exe</td><td>15524</td><td>1</td><td>6.81 s</td><td>disk_io</td></tr><tr><td>taskhostw.exe</td><td>13280</td><td>1</td><td>6.23 s</td><td>disk_io</td></tr></tbody></table>
+      <div class="subtitle">Latency is derived from first disk I/O or image load after process start.</div>
+    </div>
+
+    <div class="section grid-2">
+      <div>
+        <h2>Slow I/O offenders (time)</h2>
+        <svg viewBox="0 0 720 320"><defs><linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2e6bff"/><stop offset="100%" stop-color="#5aa1ff"/></linearGradient></defs><rect x="0" y="0" width="720" height="320" fill="none"/><rect x="40.0" y="40.0" width="44.8" height="240.0" rx="4" fill="url(#barGradient)"/><text x="62.4" y="312" text-anchor="middle" class="chart-label">taskhostw.exe</text><text x="62.4" y="34.0" text-anchor="middle" class="chart-value">1.54s</text><rect x="104.0" y="123.3" width="44.8" height="156.7" rx="4" fill="url(#barGradient)"/><text x="126.4" y="312" text-anchor="middle" class="chart-label">svchost.exe</text><text x="126.4" y="117.3" text-anchor="middle" class="chart-value">1.00s</text><rect x="168.0" y="170.2" width="44.8" height="109.8" rx="4" fill="url(#barGradient)"/><text x="190.4" y="312" text-anchor="middle" class="chart-label">DeviceEnroller.exe</text><text x="190.4" y="164.2" text-anchor="middle" class="chart-value">0.70s</text><rect x="232.0" y="183.3" width="44.8" height="96.7" rx="4" fill="url(#barGradient)"/><text x="254.4" y="312" text-anchor="middle" class="chart-label">Registry</text><text x="254.4" y="177.3" text-anchor="middle" class="chart-value">0.62s</text><rect x="296.0" y="205.0" width="44.8" height="75.0" rx="4" fill="url(#barGradient)"/><text x="318.4" y="312" text-anchor="middle" class="chart-label">DeviceEnroller.exe</text><text x="318.4" y="199.0" text-anchor="middle" class="chart-value">0.48s</text><rect x="360.0" y="211.1" width="44.8" height="68.9" rx="4" fill="url(#barGradient)"/><text x="382.4" y="312" text-anchor="middle" class="chart-label">dxgiadaptercache.exe</text><text x="382.4" y="205.1" text-anchor="middle" class="chart-value">0.44s</text><rect x="424.0" y="219.9" width="44.8" height="60.1" rx="4" fill="url(#barGradient)"/><text x="446.4" y="312" text-anchor="middle" class="chart-label">System</text><text x="446.4" y="213.9" text-anchor="middle" class="chart-value">0.38s</text><rect x="488.0" y="220.7" width="44.8" height="59.3" rx="4" fill="url(#barGradient)"/><text x="510.4" y="312" text-anchor="middle" class="chart-label">msedgewebview2.exe</text><text x="510.4" y="214.7" text-anchor="middle" class="chart-value">0.38s</text><rect x="552.0" y="234.1" width="44.8" height="45.9" rx="4" fill="url(#barGradient)"/><text x="574.4" y="312" text-anchor="middle" class="chart-label">dsregcmd.exe</text><text x="574.4" y="228.1" text-anchor="middle" class="chart-value">0.29s</text><rect x="616.0" y="244.1" width="44.8" height="35.9" rx="4" fill="url(#barGradient)"/><text x="638.4" y="312" text-anchor="middle" class="chart-label">taskhostw.exe</text><text x="638.4" y="238.1" text-anchor="middle" class="chart-value">0.23s</text></svg>
+        <table><thead><tr><th>Image</th><th>PID</th><th>Slow time</th><th>Slow ops</th></tr></thead><tbody><tr><td>taskhostw.exe</td><td>3788</td><td>1.54 s</td><td>19</td></tr><tr><td>svchost.exe</td><td>4528</td><td>1.00 s</td><td>8</td></tr><tr><td>DeviceEnroller.exe</td><td>8096</td><td>702.7 ms</td><td>8</td></tr><tr><td>Registry</td><td>184</td><td>618.7 ms</td><td>6</td></tr><tr><td>DeviceEnroller.exe</td><td>8104</td><td>479.7 ms</td><td>6</td></tr><tr><td>dxgiadaptercache.exe</td><td>3820</td><td>441.0 ms</td><td>5</td></tr><tr><td>System</td><td>4</td><td>384.5 ms</td><td>1</td></tr><tr><td>msedgewebview2.exe</td><td>13440</td><td>379.2 ms</td><td>2</td></tr><tr><td>dsregcmd.exe</td><td>4996</td><td>293.9 ms</td><td>4</td></tr><tr><td>taskhostw.exe</td><td>12412</td><td>229.9 ms</td><td>3</td></tr></tbody></table>
+      </div>
+      <div>
+        <h2>Slow I/O offenders (count)</h2>
+        <svg viewBox="0 0 720 320"><defs><linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2e6bff"/><stop offset="100%" stop-color="#5aa1ff"/></linearGradient></defs><rect x="0" y="0" width="720" height="320" fill="none"/><rect x="40.0" y="40.0" width="44.8" height="240.0" rx="4" fill="url(#barGradient)"/><text x="62.4" y="312" text-anchor="middle" class="chart-label">taskhostw.exe</text><text x="62.4" y="34.0" text-anchor="middle" class="chart-value">19.00</text><rect x="104.0" y="178.9" width="44.8" height="101.1" rx="4" fill="url(#barGradient)"/><text x="126.4" y="312" text-anchor="middle" class="chart-label">svchost.exe</text><text x="126.4" y="172.9" text-anchor="middle" class="chart-value">8.00</text><rect x="168.0" y="178.9" width="44.8" height="101.1" rx="4" fill="url(#barGradient)"/><text x="190.4" y="312" text-anchor="middle" class="chart-label">DeviceEnroller.exe</text><text x="190.4" y="172.9" text-anchor="middle" class="chart-value">8.00</text><rect x="232.0" y="204.2" width="44.8" height="75.8" rx="4" fill="url(#barGradient)"/><text x="254.4" y="312" text-anchor="middle" class="chart-label">Registry</text><text x="254.4" y="198.2" text-anchor="middle" class="chart-value">6.00</text><rect x="296.0" y="204.2" width="44.8" height="75.8" rx="4" fill="url(#barGradient)"/><text x="318.4" y="312" text-anchor="middle" class="chart-label">DeviceEnroller.exe</text><text x="318.4" y="198.2" text-anchor="middle" class="chart-value">6.00</text><rect x="360.0" y="216.8" width="44.8" height="63.2" rx="4" fill="url(#barGradient)"/><text x="382.4" y="312" text-anchor="middle" class="chart-label">dxgiadaptercache.exe</text><text x="382.4" y="210.8" text-anchor="middle" class="chart-value">5.00</text><rect x="424.0" y="229.5" width="44.8" height="50.5" rx="4" fill="url(#barGradient)"/><text x="446.4" y="312" text-anchor="middle" class="chart-label">dsregcmd.exe</text><text x="446.4" y="223.5" text-anchor="middle" class="chart-value">4.00</text><rect x="488.0" y="242.1" width="44.8" height="37.9" rx="4" fill="url(#barGradient)"/><text x="510.4" y="312" text-anchor="middle" class="chart-label">taskhostw.exe</text><text x="510.4" y="236.1" text-anchor="middle" class="chart-value">3.00</text><rect x="552.0" y="254.7" width="44.8" height="25.3" rx="4" fill="url(#barGradient)"/><text x="574.4" y="312" text-anchor="middle" class="chart-label">cyserver.exe</text><text x="574.4" y="248.7" text-anchor="middle" class="chart-value">2.00</text><rect x="616.0" y="254.7" width="44.8" height="25.3" rx="4" fill="url(#barGradient)"/><text x="638.4" y="312" text-anchor="middle" class="chart-label">msedgewebview2.exe</text><text x="638.4" y="248.7" text-anchor="middle" class="chart-value">2.00</text></svg>
+        <table><thead><tr><th>Image</th><th>PID</th><th>Slow ops</th><th>Slow time</th></tr></thead><tbody><tr><td>taskhostw.exe</td><td>3788</td><td>19</td><td>1.54 s</td></tr><tr><td>svchost.exe</td><td>4528</td><td>8</td><td>1.00 s</td></tr><tr><td>DeviceEnroller.exe</td><td>8096</td><td>8</td><td>702.7 ms</td></tr><tr><td>Registry</td><td>184</td><td>6</td><td>618.7 ms</td></tr><tr><td>DeviceEnroller.exe</td><td>8104</td><td>6</td><td>479.7 ms</td></tr><tr><td>dxgiadaptercache.exe</td><td>3820</td><td>5</td><td>441.0 ms</td></tr><tr><td>dsregcmd.exe</td><td>4996</td><td>4</td><td>293.9 ms</td></tr><tr><td>taskhostw.exe</td><td>12412</td><td>3</td><td>229.9 ms</td></tr><tr><td>cyserver.exe</td><td>6668</td><td>2</td><td>138.3 ms</td></tr><tr><td>msedgewebview2.exe</td><td>13440</td><td>2</td><td>379.2 ms</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <div class="section grid-2">
+      <div>
+        <h2>Disk I/O latency</h2>
+        <table><thead><tr><th>Percentile</th><th>Latency</th></tr></thead><tbody><tr><td>p50</td><td>0.2 ms</td></tr><tr><td>p95</td><td>1.9 ms</td></tr><tr><td>p99</td><td>9.2 ms</td></tr></tbody></table>
+        <svg viewBox="0 0 720 220"><rect x="40.0" y="158.4" width="40.7" height="21.6" rx="3" fill="#53b689" /><text x="60.4" y="212" text-anchor="middle" class="chart-label">&lt;= 0.1 ms</text><rect x="98.2" y="40.0" width="40.7" height="140.0" rx="3" fill="#53b689" /><text x="118.5" y="212" text-anchor="middle" class="chart-label">&lt;= 0.5 ms</text><rect x="156.4" y="176.3" width="40.7" height="3.7" rx="3" fill="#53b689" /><text x="176.7" y="212" text-anchor="middle" class="chart-label">&lt;= 1 ms</text><rect x="214.5" y="178.7" width="40.7" height="1.3" rx="3" fill="#53b689" /><text x="234.9" y="212" text-anchor="middle" class="chart-label">&lt;= 2 ms</text><rect x="272.7" y="178.8" width="40.7" height="1.2" rx="3" fill="#53b689" /><text x="293.1" y="212" text-anchor="middle" class="chart-label">&lt;= 5 ms</text><rect x="330.9" y="179.3" width="40.7" height="0.7" rx="3" fill="#53b689" /><text x="351.3" y="212" text-anchor="middle" class="chart-label">&lt;= 10 ms</text><rect x="389.1" y="179.3" width="40.7" height="0.7" rx="3" fill="#53b689" /><text x="409.5" y="212" text-anchor="middle" class="chart-label">&lt;= 20 ms</text><rect x="447.3" y="179.6" width="40.7" height="0.4" rx="3" fill="#53b689" /><text x="467.6" y="212" text-anchor="middle" class="chart-label">&lt;= 50 ms</text><rect x="505.5" y="179.9" width="40.7" height="0.1" rx="3" fill="#53b689" /><text x="525.8" y="212" text-anchor="middle" class="chart-label">&lt;= 100 ms</text><rect x="563.6" y="180.0" width="40.7" height="0.0" rx="3" fill="#53b689" /><text x="584.0" y="212" text-anchor="middle" class="chart-label">&lt;= 200 ms</text><rect x="621.8" y="180.0" width="40.7" height="0.0" rx="3" fill="#53b689" /><text x="642.2" y="212" text-anchor="middle" class="chart-label">&lt;= 500 ms</text></svg>
+      </div>
+      <div>
+        <h2>Top I/O bytes</h2>
+        <svg viewBox="0 0 720 320"><defs><linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2e6bff"/><stop offset="100%" stop-color="#5aa1ff"/></linearGradient></defs><rect x="0" y="0" width="720" height="320" fill="none"/><rect x="40.0" y="40.0" width="44.8" height="240.0" rx="4" fill="url(#barGradient)"/><text x="62.4" y="312" text-anchor="middle" class="chart-label">System</text><text x="62.4" y="34.0" text-anchor="middle" class="chart-value">12378.22 MB</text><rect x="104.0" y="270.5" width="44.8" height="9.5" rx="4" fill="url(#barGradient)"/><text x="126.4" y="312" text-anchor="middle" class="chart-label">cyserver.exe</text><text x="126.4" y="264.5" text-anchor="middle" class="chart-value">488.33 MB</text><rect x="168.0" y="274.1" width="44.8" height="5.9" rx="4" fill="url(#barGradient)"/><text x="190.4" y="312" text-anchor="middle" class="chart-label">msedgewebview2.exe</text><text x="190.4" y="268.1" text-anchor="middle" class="chart-value">301.98 MB</text><rect x="232.0" y="277.1" width="44.8" height="2.9" rx="4" fill="url(#barGradient)"/><text x="254.4" y="312" text-anchor="middle" class="chart-label">Registry</text><text x="254.4" y="271.1" text-anchor="middle" class="chart-value">150.47 MB</text><rect x="296.0" y="277.8" width="44.8" height="2.2" rx="4" fill="url(#barGradient)"/><text x="318.4" y="312" text-anchor="middle" class="chart-label">ZSATray.exe</text><text x="318.4" y="271.8" text-anchor="middle" class="chart-value">112.34 MB</text><rect x="360.0" y="277.9" width="44.8" height="2.1" rx="4" fill="url(#barGradient)"/><text x="382.4" y="312" text-anchor="middle" class="chart-label">MsMpEng.exe</text><text x="382.4" y="271.9" text-anchor="middle" class="chart-value">105.73 MB</text><rect x="424.0" y="278.4" width="44.8" height="1.6" rx="4" fill="url(#barGradient)"/><text x="446.4" y="312" text-anchor="middle" class="chart-label">nxtsvc.exe</text><text x="446.4" y="272.4" text-anchor="middle" class="chart-value">84.66 MB</text><rect x="488.0" y="278.6" width="44.8" height="1.4" rx="4" fill="url(#barGradient)"/><text x="510.4" y="312" text-anchor="middle" class="chart-label">explorer.exe</text><text x="510.4" y="272.6" text-anchor="middle" class="chart-value">73.28 MB</text><rect x="552.0" y="278.6" width="44.8" height="1.4" rx="4" fill="url(#barGradient)"/><text x="574.4" y="312" text-anchor="middle" class="chart-label">dwm.exe</text><text x="574.4" y="272.6" text-anchor="middle" class="chart-value">73.08 MB</text><rect x="616.0" y="278.6" width="44.8" height="1.4" rx="4" fill="url(#barGradient)"/><text x="638.4" y="312" text-anchor="middle" class="chart-label">IntelAudioService.exe</text><text x="638.4" y="272.6" text-anchor="middle" class="chart-value">69.81 MB</text></svg>
+        <table><thead><tr><th>Image</th><th>PID</th><th>I/O bytes</th><th>I/O ops</th></tr></thead><tbody><tr><td>System</td><td>4</td><td>12.09 GB</td><td>57160</td></tr><tr><td>cyserver.exe</td><td>6668</td><td>488.33 MB</td><td>10966</td></tr><tr><td>msedgewebview2.exe</td><td>14984</td><td>301.98 MB</td><td>1783</td></tr><tr><td>Registry</td><td>184</td><td>150.47 MB</td><td>1605</td></tr><tr><td>ZSATray.exe</td><td>13148</td><td>112.34 MB</td><td>5274</td></tr><tr><td>MsMpEng.exe</td><td>7140</td><td>105.73 MB</td><td>2857</td></tr><tr><td>nxtsvc.exe</td><td>3968</td><td>84.66 MB</td><td>16301</td></tr><tr><td>explorer.exe</td><td>11988</td><td>73.28 MB</td><td>3775</td></tr><tr><td>dwm.exe</td><td>1820</td><td>73.08 MB</td><td>3721</td></tr><tr><td>IntelAudioService.exe</td><td>6736</td><td>69.81 MB</td><td>2032</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Top files by slow I/O time</h2>
+      <table><thead><tr><th>File</th><th>Slow time</th><th>Slow ops</th></tr></thead><tbody><tr><td>\Device\HarddiskVolume1\EFI\Microsoft\Boot\BCD</td><td>512.4 ms</td><td>5</td></tr><tr><td>\Device\HarddiskVolume3\Windows\System32\fcon.dll</td><td>417.3 ms</td><td>5</td></tr><tr><td>\Device\HarddiskVolume3\Windows\SystemApps\MicrosoftWindows.Client.CBS_cw5n1h2txyewy\SearchUx.UI.dll</td><td>394.7 ms</td><td>1</td></tr><tr><td>\Device\HarddiskVolume3\ProgramData\Cyvera\LocalSystem\Download\cwp_compliance\default\rules\compliance\host\configuration\ensure-scan-all-downloads-and-attachments\rule.py</td><td>384.5 ms</td><td>1</td></tr><tr><td>\Device\HarddiskVolume3\Windows\System32\dmcmnutils.dll</td><td>337.7 ms</td><td>4</td></tr><tr><td>\Device\HarddiskVolume3\Windows\System32\dcsvc.dll</td><td>253.0 ms</td><td>3</td></tr><tr><td>\Device\HarddiskVolume3\Windows\System32\config\TxR\{2ad83873-efea-11ee-a54d-000d3a94eaa1}.TxR.4.regtrans-ms</td><td>242.4 ms</td><td>3</td></tr><tr><td>\Device\HarddiskVolume3\Windows\System32\dsreg.dll</td><td>237.8 ms</td><td>3</td></tr><tr><td>\Device\HarddiskVolume3\Windows\System32\TpmCoreProvisioning.dll</td><td>226.0 ms</td><td>2</td></tr><tr><td>\Device\HarddiskVolume3\Windows\System32\dmenterprisediagnostics.dll</td><td>217.1 ms</td><td>2</td></tr></tbody></table>
+    </div>
+  </div>
+</body>
+</html>

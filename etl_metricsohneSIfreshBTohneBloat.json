@@ -1,0 +1,384 @@
+{
+  "metadata": {
+    "etl_path": "/Users/zogthein/ETL_LogChecker/20260226WPRCapture_ZO05N008W2.etl",
+    "generated_at": "2026-02-26T16:23:40.730268Z",
+    "tool_version": "0.3.0",
+    "slow_io_ms": 50
+  },
+  "trace": {
+    "start_ts": 80.8397849,
+    "end_ts": 258.09623849999997,
+    "duration_s": 177.2564536,
+    "event_count": 47431317
+  },
+  "boot": {
+    "boot_start_s": 0.0,
+    "smss_start_s": 0.006931300000005081,
+    "wininit_start_s": 0.007317000000000462,
+    "winlogon_start_s": 0.00787409999999511,
+    "logonui_start_s": null,
+    "explorer_start_s": 0.1317147000000034,
+    "first_user_app_s": 0.0064133999999995694
+  },
+  "launch_latency": {
+    "top": [
+      {
+        "pid": 14312,
+        "image": "rundll32.exe",
+        "session_id": 1,
+        "startup_latency_s": 26.0084693,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 184,
+        "image": "Registry",
+        "session_id": 4294967295,
+        "startup_latency_s": 19.110805499999998,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 15388,
+        "image": "dllhost.exe",
+        "session_id": 1,
+        "startup_latency_s": 14.565545200000003,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 15328,
+        "image": "dllhost.exe",
+        "session_id": 1,
+        "startup_latency_s": 7.014107899999999,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 13484,
+        "image": "msedgewebview2.exe",
+        "session_id": 1,
+        "startup_latency_s": 4.10978190000003,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 13908,
+        "image": "msedgewebview2.exe",
+        "session_id": 1,
+        "startup_latency_s": 4.088911300000007,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 7912,
+        "image": "ms-teams.exe",
+        "session_id": 1,
+        "startup_latency_s": 3.3992317999999955,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 18400,
+        "image": "Microsoft.SharePoint.exe",
+        "session_id": 1,
+        "startup_latency_s": 2.1111461000000418,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 13496,
+        "image": "AppActions.exe",
+        "session_id": 1,
+        "startup_latency_s": 2.046704300000016,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 5984,
+        "image": "FileCoAuth.exe",
+        "session_id": 1,
+        "startup_latency_s": 1.8740025000000173,
+        "first_signal": "disk_io"
+      }
+    ],
+    "stats": {
+      "count": 101,
+      "p50_s": 0.15819940000000088,
+      "p95_s": 4.088911300000007,
+      "p99_s": 19.110805499999998
+    }
+  },
+  "io": {
+    "total_ops": 81939,
+    "total_bytes": 9659548160.0,
+    "slow_ops": 3,
+    "slow_time_s": 0.2236902,
+    "slow_time_pct": 0.001261958001849587,
+    "percentiles_s": {
+      "p50_s": 0.00016428390366358928,
+      "p95_s": 0.00115971490041236,
+      "p99_s": 0.01346768184307257
+    },
+    "histogram": {
+      "<= 0.5 ms": 50636,
+      "<= 0.1 ms": 21016,
+      "<= 1 ms": 1405,
+      "<= 2 ms": 7870,
+      "<= 20 ms": 385,
+      "<= 50 ms": 19,
+      "<= 5 ms": 340,
+      "<= 10 ms": 265,
+      "<= 200 ms": 1,
+      "<= 100 ms": 2
+    }
+  },
+  "top_processes": {
+    "by_slow_time": [
+      {
+        "pid": 9684,
+        "image": "svchost.exe",
+        "slow_time_s": 0.1102768,
+        "slow_ops": 1
+      },
+      {
+        "pid": 5600,
+        "image": "Microsoft.SharePoint.exe",
+        "slow_time_s": 0.061461499999999995,
+        "slow_ops": 1
+      },
+      {
+        "pid": 4,
+        "image": "System",
+        "slow_time_s": 0.051951899999999995,
+        "slow_ops": 1
+      },
+      {
+        "pid": 5172,
+        "image": "WmiPrvSE.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 1292,
+        "image": "lsass.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 6248,
+        "image": "cyserver.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 4348,
+        "image": "svchost.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 6644,
+        "image": "MsSense.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 6840,
+        "image": "MsMpEng.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 6232,
+        "image": "CmRcService.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      }
+    ],
+    "by_slow_ops": [
+      {
+        "pid": 4,
+        "image": "System",
+        "slow_ops": 1,
+        "slow_time_s": 0.051951899999999995
+      },
+      {
+        "pid": 9684,
+        "image": "svchost.exe",
+        "slow_ops": 1,
+        "slow_time_s": 0.1102768
+      },
+      {
+        "pid": 5600,
+        "image": "Microsoft.SharePoint.exe",
+        "slow_ops": 1,
+        "slow_time_s": 0.061461499999999995
+      },
+      {
+        "pid": 5172,
+        "image": "WmiPrvSE.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 1292,
+        "image": "lsass.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 6248,
+        "image": "cyserver.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 4348,
+        "image": "svchost.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 6644,
+        "image": "MsSense.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 6840,
+        "image": "MsMpEng.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 6232,
+        "image": "CmRcService.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      }
+    ],
+    "by_io_bytes": [
+      {
+        "pid": 4,
+        "image": "System",
+        "io_bytes": 8661497856.0,
+        "io_ops": 28783
+      },
+      {
+        "pid": 11492,
+        "image": "msedgewebview2.exe",
+        "io_bytes": 132961280.0,
+        "io_ops": 3374
+      },
+      {
+        "pid": 5600,
+        "image": "Microsoft.SharePoint.exe",
+        "io_bytes": 129082368.0,
+        "io_ops": 18424
+      },
+      {
+        "pid": 6248,
+        "image": "cyserver.exe",
+        "io_bytes": 98836992.0,
+        "io_ops": 1854
+      },
+      {
+        "pid": 6840,
+        "image": "MsMpEng.exe",
+        "io_bytes": 62656000.0,
+        "io_ops": 1128
+      },
+      {
+        "pid": 2896,
+        "image": "OneDrive.exe",
+        "io_bytes": 56404480.0,
+        "io_ops": 6377
+      },
+      {
+        "pid": 18356,
+        "image": "ms-teams.exe",
+        "io_bytes": 49235456.0,
+        "io_ops": 2330
+      },
+      {
+        "pid": 4596,
+        "image": "tlaworker.exe",
+        "io_bytes": 46044672.0,
+        "io_ops": 200
+      },
+      {
+        "pid": 9044,
+        "image": "sppsvc.exe",
+        "io_bytes": 44980224.0,
+        "io_ops": 3370
+      },
+      {
+        "pid": 3576,
+        "image": "tlaworker.exe",
+        "io_bytes": 30872064.0,
+        "io_ops": 180
+      }
+    ]
+  },
+  "top_files": [
+    {
+      "file": "\\Device\\HarddiskVolume3\\Windows\\System32\\Unistore.dll",
+      "slow_time_s": 0.1102768,
+      "slow_ops": 1
+    }
+  ],
+  "process_lifetimes": [
+    {
+      "pid": 9044,
+      "image": "sppsvc.exe",
+      "session_id": 0,
+      "lifetime_s": 176.79318870000003
+    },
+    {
+      "pid": 12968,
+      "image": "svchost.exe",
+      "session_id": 0,
+      "lifetime_s": 176.7047367
+    },
+    {
+      "pid": 3952,
+      "image": "ShellExperienceHost.exe",
+      "session_id": 1,
+      "lifetime_s": 176.64645689999998
+    },
+    {
+      "pid": 16608,
+      "image": "svchost.exe",
+      "session_id": 0,
+      "lifetime_s": 176.6459004
+    },
+    {
+      "pid": 15596,
+      "image": "msedgewebview2.exe",
+      "session_id": 1,
+      "lifetime_s": 176.6450519
+    },
+    {
+      "pid": 14416,
+      "image": "RuntimeBroker.exe",
+      "session_id": 1,
+      "lifetime_s": 176.6449918
+    },
+    {
+      "pid": 4956,
+      "image": "wpr.exe",
+      "session_id": 0,
+      "lifetime_s": 176.6444695
+    },
+    {
+      "pid": 16252,
+      "image": "msedgewebview2.exe",
+      "session_id": 1,
+      "lifetime_s": 176.64113590000005
+    },
+    {
+      "pid": 16364,
+      "image": "ctfmon.exe",
+      "session_id": 1,
+      "lifetime_s": 176.6410968
+    },
+    {
+      "pid": 16264,
+      "image": "msedgewebview2.exe",
+      "session_id": 1,
+      "lifetime_s": 176.6390422
+    }
+  ]
+}
