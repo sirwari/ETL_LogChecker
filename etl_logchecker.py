@@ -2524,9 +2524,977 @@ def _render_report(
     return html.strip()
 
 
+def _write_json_file(path: str, data: Any) -> None:
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(data, handle, indent=2)
+
+
+def _resolve_time_scale(etl_path: str, time_scale: str | None) -> tuple[float | None, str]:
+    override_scale = _parse_time_scale_arg(time_scale or "auto")
+    if override_scale is not None:
+        return override_scale, "override"
+    perf_scale = _read_perf_counter_scale(etl_path)
+    if perf_scale is not None:
+        return perf_scale, "perf_freq"
+    return None, "auto"
+
+
+def run_analysis_job(
+    etl_path: str,
+    report_path: str | None = None,
+    metrics_output_path: str | None = None,
+    compare_metrics_path: str | None = None,
+    compare_etl_path: str | None = None,
+    timeline_output_path: str | None = None,
+    timeline_format: str = "json",
+    plot_dir: str | None = None,
+    plot_bin_s: float = 1.0,
+    slow_io_ms: int = 50,
+    top_n: int = 10,
+    time_scale: str | None = "auto",
+    bootlog: bool = False,
+    boot_window_s: float = 300.0,
+    debug: bool = False,
+    progress_every: int = 200000,
+    tracerpt_exe: str | None = None,
+    use_tracerpt: bool = True,
+    use_etl_observer: bool = True,
+    force_etl_observer: bool = False,
+    return_metrics: bool = True,
+    return_baseline_metrics: bool = False,
+) -> dict[str, Any]:
+    if compare_metrics_path and compare_etl_path:
+        raise ValueError("Provide either compare_metrics_path or compare_etl_path, not both.")
+    if not os.path.isfile(etl_path):
+        raise ValueError(f"ETL file not found: {etl_path}")
+    if compare_etl_path and not os.path.isfile(compare_etl_path):
+        raise ValueError(f"Baseline ETL file not found: {compare_etl_path}")
+    if compare_metrics_path and not os.path.isfile(compare_metrics_path):
+        raise ValueError(f"Baseline metrics file not found: {compare_metrics_path}")
+    if plot_bin_s <= 0:
+        raise ValueError("plot_bin_s must be greater than 0.")
+    if boot_window_s <= 0:
+        raise ValueError("boot_window_s must be greater than 0.")
+    if not use_etl_observer and force_etl_observer:
+        raise ValueError(
+            "Cannot use force_etl_observer when use_etl_observer is disabled."
+        )
+
+    timestamp_scale, time_scale_source = _resolve_time_scale(etl_path, time_scale)
+
+    ux = ETLUXAnalyzer(
+        etl_path,
+        slow_io_ms=slow_io_ms,
+        top_n=top_n,
+        debug=debug,
+        progress_every=progress_every,
+        timestamp_scale=timestamp_scale,
+        time_scale_source=time_scale_source,
+        bootlog=bootlog,
+        boot_window_s=boot_window_s,
+    )
+    metrics = ux.analyze()
+
+    if metrics_output_path:
+        _write_json_file(metrics_output_path, metrics)
+
+    baseline_metrics = None
+    baseline_metrics_path = None
+    if compare_metrics_path:
+        with open(compare_metrics_path, "r", encoding="utf-8") as handle:
+            baseline_metrics = json.load(handle)
+    elif compare_etl_path:
+        baseline_ux = ETLUXAnalyzer(
+            compare_etl_path,
+            slow_io_ms=slow_io_ms,
+            top_n=top_n,
+            debug=debug,
+            progress_every=progress_every,
+            timestamp_scale=timestamp_scale,
+            time_scale_source=time_scale_source,
+            bootlog=bootlog,
+            boot_window_s=boot_window_s,
+        )
+        baseline_metrics = baseline_ux.analyze()
+        if metrics_output_path or report_path:
+            baseline_metrics_path = _derive_baseline_metrics_path(
+                metrics_output_path, report_path
+            )
+            _write_json_file(baseline_metrics_path, baseline_metrics)
+
+    comparison = _compare_metrics(metrics, baseline_metrics) if baseline_metrics else None
+
+    timeline_rows = None
+    timeline_path = None
+    if timeline_output_path:
+        trace_duration = metrics.get("trace", {}).get("duration_s") or 0.0
+        timeline_rows = _build_timeline_rows(
+            ux.pid_start_ts,
+            ux.pid_end_ts,
+            ux.pid_info,
+            ux.pid_first_io_ts,
+            ux.pid_first_image_ts,
+            trace_duration,
+        )
+        _write_timeline_output(timeline_rows, timeline_output_path, timeline_format)
+        timeline_path = timeline_output_path
+
+    warnings: list[str] = []
+    plot_paths: dict[str, str] = {}
+    if plot_dir:
+        trends = _collect_network_trends(
+            etl_path,
+            plot_bin_s,
+            timestamp_scale,
+            debug,
+            tracerpt_exe,
+            use_tracerpt,
+            use_etl_observer,
+            force_etl_observer,
+        )
+        plot_path = _write_network_throughput_plot(trends, plot_dir)
+        if plot_path:
+            if report_path:
+                report_dir = os.path.dirname(report_path) or "."
+                plot_paths["network_throughput"] = os.path.relpath(
+                    plot_path, report_dir
+                )
+            else:
+                plot_paths["network_throughput"] = plot_path
+        else:
+            warnings.append("Plot generation skipped (missing matplotlib or no data).")
+
+    report_html = None
+    if report_path:
+        report_html = _render_report(metrics, baseline_metrics, plot_paths)
+        with open(report_path, "w", encoding="utf-8") as handle:
+            handle.write(report_html)
+
+    response: dict[str, Any] = {
+        "comparison": comparison,
+        "metrics_path": metrics_output_path,
+        "baseline_metrics_path": baseline_metrics_path,
+        "report_path": report_path,
+        "report_html": report_html,
+        "timeline_path": timeline_path,
+        "timeline_rows": timeline_rows,
+        "plot_paths": plot_paths,
+        "warnings": warnings,
+    }
+
+    if return_metrics:
+        response["metrics"] = metrics
+    if return_baseline_metrics:
+        response["baseline_metrics"] = baseline_metrics
+
+    return response
+
+
+def _suggest_output_paths(etl_path: str | None) -> dict[str, str]:
+    if not etl_path:
+        return {
+            "report_path": "",
+            "metrics_output_path": "",
+            "timeline_output_path": "",
+            "plot_dir": "",
+        }
+    normalized = os.path.abspath(etl_path)
+    directory = os.path.dirname(normalized) or "."
+    stem = os.path.splitext(os.path.basename(normalized))[0] or "etl_trace"
+    return {
+        "report_path": os.path.join(directory, f"{stem}_report.html"),
+        "metrics_output_path": os.path.join(directory, f"{stem}_metrics.json"),
+        "timeline_output_path": os.path.join(directory, f"{stem}_timeline.json"),
+        "plot_dir": os.path.join(directory, f"{stem}_plots"),
+    }
+
+
+def _read_text_file(path: str | None) -> str | None:
+    if not path:
+        return None
+    if not os.path.isfile(path):
+        return None
+    with open(path, "r", encoding="utf-8", errors="replace") as handle:
+        return handle.read()
+
+
+def _format_json_block(data: Any) -> str:
+    return json.dumps(data, indent=2, sort_keys=True)
+
+
+def _build_analysis_summary(
+    result: dict[str, Any],
+    etl_path: str | None = None,
+    compare_source: str | None = None,
+) -> str:
+    metrics = result.get("metrics", {}) or {}
+    trace = metrics.get("trace", {}) or {}
+    io = metrics.get("io", {}) or {}
+    boot = metrics.get("boot", {}) or {}
+    io_percentiles = io.get("percentiles_s", {}) or {}
+
+    lines = [
+        f"ETL file: {etl_path or metrics.get('metadata', {}).get('etl_path') or 'n/a'}",
+        f"Events: {trace.get('event_count', 'n/a')}",
+        f"Trace duration: {_format_seconds(trace.get('duration_s'))}",
+        f"Slow I/O time: {_format_seconds(io.get('slow_time_s'))}",
+        f"Slow I/O %: {(float(io.get('slow_time_pct', 0.0) or 0.0) * 100.0):.2f}%",
+        f"I/O p95: {_format_seconds(io_percentiles.get('p95_s'))}",
+        f"I/O p99: {_format_seconds(io_percentiles.get('p99_s'))}",
+        f"Boot duration: {_format_seconds(boot.get('boot_duration_s'))}",
+    ]
+
+    if compare_source:
+        lines.append(f"Baseline source: {compare_source}")
+
+    for label, value in (
+        ("Metrics JSON", result.get("metrics_path")),
+        ("Baseline JSON", result.get("baseline_metrics_path")),
+        ("Timeline", result.get("timeline_path")),
+        ("HTML report", result.get("report_path")),
+    ):
+        lines.append(f"{label}: {value or 'not written'}")
+
+    plot_paths = result.get("plot_paths", {}) or {}
+    if plot_paths:
+        for key, value in sorted(plot_paths.items()):
+            lines.append(f"Plot ({key}): {value}")
+    else:
+        lines.append("Plots: not written")
+
+    warnings = result.get("warnings", []) or []
+    if warnings:
+        lines.append("")
+        lines.append("Warnings:")
+        lines.extend(f"- {warning}" for warning in warnings)
+
+    comparison = result.get("comparison", {}) or {}
+    if comparison:
+        lines.append("")
+        lines.append("Comparison deltas:")
+        for key in sorted(comparison.keys()):
+            entry = comparison.get(key, {}) or {}
+            delta = entry.get("delta")
+            pct = entry.get("pct")
+            delta_text = "n/a"
+            if isinstance(delta, (int, float)):
+                if key.endswith("_pct"):
+                    delta_text = f"{delta * 100:.2f}%"
+                else:
+                    delta_text = _format_seconds(float(delta))
+            pct_text = "n/a"
+            if isinstance(pct, (int, float)):
+                pct_text = f"{pct * 100:.2f}%"
+            lines.append(f"- {key}: delta={delta_text}, pct={pct_text}")
+
+    return "\n".join(lines)
+
+
+def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
+    try:
+        import tkinter as tk
+        from tkinter import filedialog, messagebox, scrolledtext, ttk
+    except Exception as exc:  # pragma: no cover - depends on runtime environment
+        print(f"Tkinter is not available: {exc}", file=sys.stderr)
+        return 1
+
+    class _StandaloneGUI:
+        def __init__(self) -> None:
+            self.root = tk.Tk()
+            self.root.title("ETL LogChecker")
+            self.root.geometry("1280x900")
+            self.root.minsize(1100, 760)
+
+            self.status_var = tk.StringVar(
+                value="Ready. Pick an ETL trace or metrics files to begin."
+            )
+
+            self.analyze_etl_var = tk.StringVar(value=initial_etl_path or "")
+            self.report_path_var = tk.StringVar()
+            self.metrics_output_var = tk.StringVar()
+            self.timeline_output_var = tk.StringVar()
+            self.plot_dir_var = tk.StringVar()
+            self.compare_metrics_var = tk.StringVar()
+            self.compare_etl_var = tk.StringVar()
+            self.tracerpt_exe_var = tk.StringVar()
+            self.slow_io_ms_var = tk.IntVar(value=50)
+            self.top_n_var = tk.IntVar(value=10)
+            self.time_scale_var = tk.StringVar(value="auto")
+            self.timeline_format_var = tk.StringVar(value="json")
+            self.plot_bin_s_var = tk.DoubleVar(value=1.0)
+            self.bootlog_var = tk.BooleanVar(value=False)
+            self.boot_window_s_var = tk.DoubleVar(value=300.0)
+            self.use_tracerpt_var = tk.BooleanVar(value=True)
+            self.use_etl_observer_var = tk.BooleanVar(value=True)
+            self.force_etl_observer_var = tk.BooleanVar(value=False)
+            self.debug_var = tk.BooleanVar(value=False)
+
+            self.compare_current_var = tk.StringVar()
+            self.compare_baseline_var = tk.StringVar()
+
+            self.review_current_var = tk.StringVar()
+            self.review_baseline_var = tk.StringVar()
+            self.review_focus_var = tk.StringVar()
+            self.review_host_var = tk.StringVar(
+                value=os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+            )
+            self.review_model_var = tk.StringVar(
+                value=os.environ.get("OLLAMA_MODEL", "gptoss20b")
+            )
+            self.review_temperature_var = tk.DoubleVar(value=0.2)
+            self.review_max_tokens_var = tk.IntVar(value=800)
+
+            self._configure_style()
+            self._build_layout(scrolledtext, ttk)
+            self._apply_suggested_output_paths(force=False)
+
+        def _configure_style(self) -> None:
+            style = ttk.Style(self.root)
+            if "clam" in style.theme_names():
+                style.theme_use("clam")
+            style.configure("TLabelframe", padding=10)
+            style.configure("TLabelframe.Label", font=("Helvetica", 11, "bold"))
+            style.configure("TButton", padding=(10, 6))
+
+        def _build_layout(self, scrolledtext_module: Any, ttk_module: Any) -> None:
+            self.root.columnconfigure(0, weight=1)
+            self.root.rowconfigure(0, weight=1)
+            container = ttk_module.Frame(self.root, padding=16)
+            container.grid(sticky="nsew")
+            container.columnconfigure(0, weight=1)
+            container.rowconfigure(0, weight=1)
+
+            notebook = ttk_module.Notebook(container)
+            notebook.grid(row=0, column=0, sticky="nsew")
+
+            analyze_tab = ttk_module.Frame(notebook, padding=12)
+            compare_tab = ttk_module.Frame(notebook, padding=12)
+            review_tab = ttk_module.Frame(notebook, padding=12)
+            notebook.add(analyze_tab, text="Analyze ETL")
+            notebook.add(compare_tab, text="Compare Metrics")
+            notebook.add(review_tab, text="Review Metrics")
+
+            self._build_analyze_tab(analyze_tab, ttk_module)
+            self._build_compare_tab(compare_tab, ttk_module)
+            self._build_review_tab(review_tab, ttk_module)
+
+            status = ttk_module.Label(
+                container,
+                textvariable=self.status_var,
+                anchor="w",
+            )
+            status.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+
+        def _build_path_row(
+            self,
+            parent: Any,
+            row: int,
+            label: str,
+            variable: Any,
+            mode: str,
+            filetypes: list[tuple[str, str]] | None = None,
+        ) -> None:
+            ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", pady=4)
+            ttk.Entry(parent, textvariable=variable).grid(
+                row=row, column=1, sticky="ew", padx=(8, 8), pady=4
+            )
+            button = ttk.Button(
+                parent,
+                text="Browse",
+                command=lambda: self._choose_path(
+                    variable,
+                    mode=mode,
+                    filetypes=filetypes,
+                ),
+            )
+            button.grid(row=row, column=2, sticky="ew", pady=4)
+
+        def _choose_path(
+            self,
+            variable: Any,
+            mode: str,
+            filetypes: list[tuple[str, str]] | None = None,
+        ) -> None:
+            current = variable.get().strip()
+            initial_dir = (
+                os.path.dirname(current)
+                if current and os.path.dirname(current)
+                else os.getcwd()
+            )
+            selected = ""
+            if mode == "open":
+                selected = filedialog.askopenfilename(
+                    initialdir=initial_dir,
+                    filetypes=filetypes or [("All files", "*.*")],
+                )
+            elif mode == "save":
+                selected = filedialog.asksaveasfilename(
+                    initialdir=initial_dir,
+                    initialfile=os.path.basename(current) or None,
+                    filetypes=filetypes or [("All files", "*.*")],
+                )
+            elif mode == "dir":
+                selected = filedialog.askdirectory(initialdir=initial_dir)
+            if selected:
+                variable.set(selected)
+                if variable is self.analyze_etl_var:
+                    self._apply_suggested_output_paths(force=False)
+
+        def _new_text_area(
+            self,
+            parent: Any,
+            wrap: str = "word",
+            height: int = 12,
+        ) -> Any:
+            widget = scrolledtext.ScrolledText(parent, wrap=wrap, height=height)
+            widget.grid(sticky="nsew")
+            return widget
+
+        def _set_text(self, widget: Any, text: str) -> None:
+            widget.configure(state="normal")
+            widget.delete("1.0", tk.END)
+            widget.insert("1.0", text)
+            widget.configure(state="disabled")
+
+        def _build_analyze_tab(
+            self,
+            parent: Any,
+            ttk_module: Any,
+        ) -> None:
+            parent.columnconfigure(0, weight=1)
+            parent.rowconfigure(1, weight=1)
+
+            controls = ttk_module.LabelFrame(parent, text="Inputs & Options")
+            controls.grid(row=0, column=0, sticky="ew")
+            controls.columnconfigure(1, weight=1)
+            for idx in range(3):
+                controls.columnconfigure(idx, weight=1 if idx == 1 else 0)
+
+            row = 0
+            self._build_path_row(
+                controls,
+                row,
+                "ETL trace",
+                self.analyze_etl_var,
+                "open",
+                [("ETL files", "*.etl"), ("All files", "*.*")],
+            )
+            row += 1
+            self._build_path_row(
+                controls,
+                row,
+                "Report output",
+                self.report_path_var,
+                "save",
+                [("HTML", "*.html"), ("All files", "*.*")],
+            )
+            row += 1
+            self._build_path_row(
+                controls,
+                row,
+                "Metrics output",
+                self.metrics_output_var,
+                "save",
+                [("JSON", "*.json"), ("All files", "*.*")],
+            )
+            row += 1
+            self._build_path_row(
+                controls,
+                row,
+                "Timeline output",
+                self.timeline_output_var,
+                "save",
+                [
+                    ("JSON", "*.json"),
+                    ("CSV", "*.csv"),
+                    ("All files", "*.*"),
+                ],
+            )
+            row += 1
+            self._build_path_row(controls, row, "Plot directory", self.plot_dir_var, "dir")
+            row += 1
+            self._build_path_row(
+                controls,
+                row,
+                "Baseline metrics",
+                self.compare_metrics_var,
+                "open",
+                [("JSON", "*.json"), ("All files", "*.*")],
+            )
+            row += 1
+            self._build_path_row(
+                controls,
+                row,
+                "Baseline ETL",
+                self.compare_etl_var,
+                "open",
+                [("ETL files", "*.etl"), ("All files", "*.*")],
+            )
+            row += 1
+            self._build_path_row(
+                controls,
+                row,
+                "tracerpt.exe",
+                self.tracerpt_exe_var,
+                "open",
+                [("Executable", "*.exe"), ("All files", "*.*")],
+            )
+            row += 1
+
+            numeric_frame = ttk_module.Frame(controls)
+            numeric_frame.grid(row=row, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+            for idx in range(6):
+                numeric_frame.columnconfigure(idx, weight=1)
+
+            ttk_module.Label(numeric_frame, text="Slow I/O (ms)").grid(
+                row=0, column=0, sticky="w"
+            )
+            ttk_module.Entry(
+                numeric_frame,
+                textvariable=self.slow_io_ms_var,
+                width=10,
+            ).grid(row=1, column=0, sticky="ew", padx=(0, 8))
+
+            ttk_module.Label(numeric_frame, text="Top N").grid(row=0, column=1, sticky="w")
+            ttk_module.Entry(
+                numeric_frame,
+                textvariable=self.top_n_var,
+                width=10,
+            ).grid(row=1, column=1, sticky="ew", padx=(0, 8))
+
+            ttk_module.Label(numeric_frame, text="Time scale").grid(
+                row=0, column=2, sticky="w"
+            )
+            ttk_module.Entry(
+                numeric_frame,
+                textvariable=self.time_scale_var,
+                width=10,
+            ).grid(row=1, column=2, sticky="ew", padx=(0, 8))
+
+            ttk_module.Label(numeric_frame, text="Timeline format").grid(
+                row=0, column=3, sticky="w"
+            )
+            ttk_module.Combobox(
+                numeric_frame,
+                textvariable=self.timeline_format_var,
+                values=("json", "csv"),
+                state="readonly",
+                width=10,
+            ).grid(row=1, column=3, sticky="ew", padx=(0, 8))
+
+            ttk_module.Label(numeric_frame, text="Plot bin (s)").grid(
+                row=0, column=4, sticky="w"
+            )
+            ttk_module.Entry(
+                numeric_frame,
+                textvariable=self.plot_bin_s_var,
+                width=10,
+            ).grid(row=1, column=4, sticky="ew", padx=(0, 8))
+
+            ttk_module.Label(numeric_frame, text="Boot window (s)").grid(
+                row=0, column=5, sticky="w"
+            )
+            ttk_module.Entry(
+                numeric_frame,
+                textvariable=self.boot_window_s_var,
+                width=10,
+            ).grid(row=1, column=5, sticky="ew")
+
+            flag_frame = ttk_module.Frame(controls)
+            flag_frame.grid(row=row + 1, column=0, columnspan=3, sticky="ew", pady=(10, 0))
+            for idx in range(5):
+                flag_frame.columnconfigure(idx, weight=1)
+
+            ttk_module.Checkbutton(
+                flag_frame,
+                text="Bootlog",
+                variable=self.bootlog_var,
+            ).grid(row=0, column=0, sticky="w")
+            ttk_module.Checkbutton(
+                flag_frame,
+                text="Use tracerpt fallback",
+                variable=self.use_tracerpt_var,
+            ).grid(row=0, column=1, sticky="w")
+            ttk_module.Checkbutton(
+                flag_frame,
+                text="Use ETL observer",
+                variable=self.use_etl_observer_var,
+            ).grid(row=0, column=2, sticky="w")
+            ttk_module.Checkbutton(
+                flag_frame,
+                text="Force ETL observer",
+                variable=self.force_etl_observer_var,
+            ).grid(row=0, column=3, sticky="w")
+            ttk_module.Checkbutton(
+                flag_frame,
+                text="Debug logging",
+                variable=self.debug_var,
+            ).grid(row=0, column=4, sticky="w")
+
+            button_frame = ttk_module.Frame(controls)
+            button_frame.grid(
+                row=row + 2, column=0, columnspan=3, sticky="ew", pady=(12, 0)
+            )
+            ttk_module.Button(
+                button_frame,
+                text="Suggest Outputs",
+                command=lambda: self._apply_suggested_output_paths(force=True),
+            ).grid(row=0, column=0, sticky="w")
+            ttk_module.Button(
+                button_frame,
+                text="Run Analysis",
+                command=self._run_analysis,
+            ).grid(row=0, column=1, sticky="w", padx=(8, 0))
+
+            results = ttk_module.Notebook(parent)
+            results.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
+
+            summary_frame = ttk_module.Frame(results, padding=10)
+            metrics_frame = ttk_module.Frame(results, padding=10)
+            baseline_frame = ttk_module.Frame(results, padding=10)
+            comparison_frame = ttk_module.Frame(results, padding=10)
+            report_frame = ttk_module.Frame(results, padding=10)
+            for frame in (
+                summary_frame,
+                metrics_frame,
+                baseline_frame,
+                comparison_frame,
+                report_frame,
+            ):
+                frame.columnconfigure(0, weight=1)
+                frame.rowconfigure(0, weight=1)
+
+            results.add(summary_frame, text="Summary")
+            results.add(metrics_frame, text="Metrics JSON")
+            results.add(baseline_frame, text="Baseline JSON")
+            results.add(comparison_frame, text="Comparison")
+            results.add(report_frame, text="Report HTML")
+
+            self.analysis_summary_text = self._new_text_area(summary_frame, height=18)
+            self.analysis_metrics_text = self._new_text_area(metrics_frame, wrap="none")
+            self.analysis_baseline_text = self._new_text_area(
+                baseline_frame, wrap="none"
+            )
+            self.analysis_comparison_text = self._new_text_area(
+                comparison_frame, wrap="none"
+            )
+            self.analysis_report_text = self._new_text_area(report_frame, wrap="none")
+
+        def _build_compare_tab(
+            self,
+            parent: Any,
+            ttk_module: Any,
+        ) -> None:
+            parent.columnconfigure(0, weight=1)
+            parent.rowconfigure(1, weight=1)
+
+            controls = ttk_module.LabelFrame(parent, text="Compare Existing Metrics")
+            controls.grid(row=0, column=0, sticky="ew")
+            controls.columnconfigure(1, weight=1)
+
+            self._build_path_row(
+                controls,
+                0,
+                "Current metrics",
+                self.compare_current_var,
+                "open",
+                [("JSON", "*.json"), ("All files", "*.*")],
+            )
+            self._build_path_row(
+                controls,
+                1,
+                "Baseline metrics",
+                self.compare_baseline_var,
+                "open",
+                [("JSON", "*.json"), ("All files", "*.*")],
+            )
+
+            ttk_module.Button(
+                controls,
+                text="Compare Metrics",
+                command=self._run_compare_metrics,
+            ).grid(row=2, column=0, columnspan=3, sticky="w", pady=(8, 0))
+
+            output_frame = ttk_module.Frame(parent, padding=(0, 12, 0, 0))
+            output_frame.grid(row=1, column=0, sticky="nsew")
+            output_frame.columnconfigure(0, weight=1)
+            output_frame.rowconfigure(0, weight=1)
+            self.compare_output_text = self._new_text_area(output_frame, wrap="none")
+
+        def _build_review_tab(
+            self,
+            parent: Any,
+            ttk_module: Any,
+        ) -> None:
+            parent.columnconfigure(0, weight=1)
+            parent.rowconfigure(1, weight=1)
+
+            controls = ttk_module.LabelFrame(parent, text="Review Metrics With Ollama")
+            controls.grid(row=0, column=0, sticky="ew")
+            controls.columnconfigure(1, weight=1)
+
+            self._build_path_row(
+                controls,
+                0,
+                "Current metrics",
+                self.review_current_var,
+                "open",
+                [("JSON", "*.json"), ("All files", "*.*")],
+            )
+            self._build_path_row(
+                controls,
+                1,
+                "Baseline metrics",
+                self.review_baseline_var,
+                "open",
+                [("JSON", "*.json"), ("All files", "*.*")],
+            )
+
+            ttk_module.Label(controls, text="Focus prompt").grid(
+                row=2, column=0, sticky="w", pady=4
+            )
+            ttk_module.Entry(
+                controls,
+                textvariable=self.review_focus_var,
+            ).grid(row=2, column=1, columnspan=2, sticky="ew", padx=(8, 0), pady=4)
+
+            settings = ttk_module.Frame(controls)
+            settings.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+            for idx in range(4):
+                settings.columnconfigure(idx, weight=1)
+
+            ttk_module.Label(settings, text="Ollama host").grid(
+                row=0, column=0, sticky="w"
+            )
+            ttk_module.Entry(
+                settings,
+                textvariable=self.review_host_var,
+            ).grid(row=1, column=0, sticky="ew", padx=(0, 8))
+
+            ttk_module.Label(settings, text="Model").grid(row=0, column=1, sticky="w")
+            ttk_module.Entry(
+                settings,
+                textvariable=self.review_model_var,
+            ).grid(row=1, column=1, sticky="ew", padx=(0, 8))
+
+            ttk_module.Label(settings, text="Temperature").grid(
+                row=0, column=2, sticky="w"
+            )
+            ttk_module.Entry(
+                settings,
+                textvariable=self.review_temperature_var,
+            ).grid(row=1, column=2, sticky="ew", padx=(0, 8))
+
+            ttk_module.Label(settings, text="Max tokens").grid(
+                row=0, column=3, sticky="w"
+            )
+            ttk_module.Entry(
+                settings,
+                textvariable=self.review_max_tokens_var,
+            ).grid(row=1, column=3, sticky="ew")
+
+            ttk_module.Button(
+                controls,
+                text="Run Review",
+                command=self._run_review,
+            ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(8, 0))
+
+            output_frame = ttk_module.Frame(parent, padding=(0, 12, 0, 0))
+            output_frame.grid(row=1, column=0, sticky="nsew")
+            output_frame.columnconfigure(0, weight=1)
+            output_frame.rowconfigure(0, weight=1)
+            self.review_output_text = self._new_text_area(output_frame, wrap="none")
+
+        def _apply_suggested_output_paths(self, force: bool) -> None:
+            suggestions = _suggest_output_paths(self.analyze_etl_var.get().strip() or None)
+            for key, variable in (
+                ("report_path", self.report_path_var),
+                ("metrics_output_path", self.metrics_output_var),
+                ("timeline_output_path", self.timeline_output_var),
+                ("plot_dir", self.plot_dir_var),
+            ):
+                if force or not variable.get().strip():
+                    variable.set(suggestions.get(key, ""))
+
+        def _sync_followup_paths(self, result: dict[str, Any]) -> None:
+            metrics_path = result.get("metrics_path")
+            if metrics_path:
+                self.compare_current_var.set(metrics_path)
+                self.review_current_var.set(metrics_path)
+
+            baseline_source = (
+                result.get("baseline_metrics_path")
+                or self.compare_metrics_var.get().strip()
+                or ""
+            )
+            if baseline_source:
+                self.compare_baseline_var.set(baseline_source)
+                self.review_baseline_var.set(baseline_source)
+
+        def _run_analysis(self) -> None:
+            etl_path = self.analyze_etl_var.get().strip()
+            if not etl_path:
+                messagebox.showerror("Missing ETL", "Choose an ETL trace first.")
+                return
+
+            self.status_var.set("Running ETL analysis...")
+            self.root.update_idletasks()
+
+            compare_source = (
+                self.compare_metrics_var.get().strip()
+                or self.compare_etl_var.get().strip()
+            )
+
+            try:
+                result = run_analysis_job(
+                    etl_path=etl_path,
+                    report_path=self.report_path_var.get().strip() or None,
+                    metrics_output_path=self.metrics_output_var.get().strip() or None,
+                    compare_metrics_path=self.compare_metrics_var.get().strip() or None,
+                    compare_etl_path=self.compare_etl_var.get().strip() or None,
+                    timeline_output_path=self.timeline_output_var.get().strip() or None,
+                    timeline_format=self.timeline_format_var.get().strip() or "json",
+                    plot_dir=self.plot_dir_var.get().strip() or None,
+                    plot_bin_s=float(self.plot_bin_s_var.get()),
+                    slow_io_ms=int(self.slow_io_ms_var.get()),
+                    top_n=int(self.top_n_var.get()),
+                    time_scale=self.time_scale_var.get().strip() or "auto",
+                    bootlog=bool(self.bootlog_var.get()),
+                    boot_window_s=float(self.boot_window_s_var.get()),
+                    debug=bool(self.debug_var.get()),
+                    progress_every=200000 if self.debug_var.get() else 0,
+                    tracerpt_exe=self.tracerpt_exe_var.get().strip() or None,
+                    use_tracerpt=bool(self.use_tracerpt_var.get()),
+                    use_etl_observer=bool(self.use_etl_observer_var.get()),
+                    force_etl_observer=bool(self.force_etl_observer_var.get()),
+                    return_metrics=True,
+                    return_baseline_metrics=True,
+                )
+            except Exception as exc:
+                self.status_var.set("Analysis failed.")
+                messagebox.showerror("Analysis failed", str(exc))
+                return
+
+            baseline_data = result.get("baseline_metrics")
+            if baseline_data is None and self.compare_metrics_var.get().strip():
+                try:
+                    with open(
+                        self.compare_metrics_var.get().strip(),
+                        "r",
+                        encoding="utf-8",
+                    ) as handle:
+                        baseline_data = json.load(handle)
+                except Exception:
+                    baseline_data = None
+
+            self._set_text(
+                self.analysis_summary_text,
+                _build_analysis_summary(
+                    result,
+                    etl_path=etl_path,
+                    compare_source=compare_source or None,
+                ),
+            )
+            self._set_text(
+                self.analysis_metrics_text,
+                _format_json_block(result.get("metrics", {})),
+            )
+            self._set_text(
+                self.analysis_baseline_text,
+                _format_json_block(baseline_data or {}),
+            )
+            self._set_text(
+                self.analysis_comparison_text,
+                _format_json_block(result.get("comparison", {})),
+            )
+            report_text = result.get("report_html") or _read_text_file(result.get("report_path"))
+            self._set_text(
+                self.analysis_report_text,
+                report_text or "No HTML report was generated.",
+            )
+
+            self._sync_followup_paths(result)
+
+            if result.get("comparison"):
+                self._set_text(
+                    self.compare_output_text,
+                    _format_json_block({"deltas": result["comparison"]}),
+                )
+
+            self.status_var.set("Analysis complete.")
+
+        def _run_compare_metrics(self) -> None:
+            current_path = self.compare_current_var.get().strip()
+            baseline_path = self.compare_baseline_var.get().strip()
+            if not current_path or not baseline_path:
+                messagebox.showerror(
+                    "Missing metrics",
+                    "Choose both current and baseline metrics JSON files.",
+                )
+                return
+
+            self.status_var.set("Comparing metrics...")
+            self.root.update_idletasks()
+
+            try:
+                from etl_agent import compare_and_score
+
+                result = compare_and_score(current_path, baseline_path)
+            except Exception as exc:
+                self.status_var.set("Metrics comparison failed.")
+                messagebox.showerror("Metrics comparison failed", str(exc))
+                return
+
+            self._set_text(self.compare_output_text, _format_json_block(result))
+            self.status_var.set("Metrics comparison complete.")
+
+        def _run_review(self) -> None:
+            current_path = self.review_current_var.get().strip()
+            baseline_path = self.review_baseline_var.get().strip() or None
+            if not current_path:
+                messagebox.showerror(
+                    "Missing metrics",
+                    "Choose the current metrics JSON file first.",
+                )
+                return
+
+            self.status_var.set("Running review...")
+            self.root.update_idletasks()
+
+            try:
+                from etl_agent import review_with_llm
+
+                result = review_with_llm(
+                    current=current_path,
+                    baseline=baseline_path,
+                    ollama_host=self.review_host_var.get().strip() or None,
+                    model=self.review_model_var.get().strip() or None,
+                    temperature=float(self.review_temperature_var.get()),
+                    max_tokens=int(self.review_max_tokens_var.get()),
+                    focus=self.review_focus_var.get().strip() or None,
+                    return_raw=False,
+                )
+            except Exception as exc:
+                self.status_var.set("Review failed.")
+                messagebox.showerror("Review failed", str(exc))
+                return
+
+            self._set_text(self.review_output_text, _format_json_block(result))
+            self.status_var.set("Review complete.")
+
+    app = _StandaloneGUI()
+    app.root.mainloop()
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Analyze Windows WPR .etl files.")
-    parser.add_argument("etl_path", help="Path to the .etl file")
+    parser.add_argument("etl_path", nargs="?", help="Path to the .etl file")
+    parser.add_argument(
+        "--gui",
+        action="store_true",
+        help="Launch the standalone GUI.",
+    )
     parser.add_argument("--output", help="Output path (default: stdout)")
     parser.add_argument("--xml-output", help="Write a full XML event dump to path")
     parser.add_argument("--format", choices=["auto", "pandas", "table"], default="auto")
@@ -2594,6 +3562,13 @@ def main() -> int:
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     args = parser.parse_args()
 
+    if args.gui:
+        return launch_standalone_gui(args.etl_path)
+
+    if not args.etl_path:
+        print("ETL file path is required unless --gui is used.", file=sys.stderr)
+        return 2
+
     if args.no_etl_observer and args.force_etl_observer:
         print(
             "Cannot use --no-etl-observer with --force-etl-observer.",
@@ -2608,26 +3583,12 @@ def main() -> int:
         print(f"Baseline ETL file not found: {args.compare_etl}", file=sys.stderr)
         return 1
 
-    try:
-        override_scale = _parse_time_scale_arg(args.time_scale)
-    except ValueError as exc:
-        print(f"Invalid --time-scale: {exc}", file=sys.stderr)
-        return 1
     if args.plot_bin_s <= 0:
         print("--plot-bin-s must be greater than 0.", file=sys.stderr)
         return 1
     if args.boot_window_s <= 0:
         print("--boot-window-s must be greater than 0.", file=sys.stderr)
         return 1
-
-    time_scale_source = "auto"
-    if override_scale is not None:
-        timestamp_scale = override_scale
-        time_scale_source = "override"
-    else:
-        timestamp_scale = _read_perf_counter_scale(args.etl_path)
-        if timestamp_scale is not None:
-            time_scale_source = "perf_freq"
 
     ux_required = bool(
         args.report
@@ -2650,113 +3611,45 @@ def main() -> int:
             else:
                 metrics_path = "etl_metrics.json"
 
-        ux = ETLUXAnalyzer(
-            args.etl_path,
-            slow_io_ms=args.slow_io_ms,
-            top_n=args.top_n,
-            debug=args.debug,
-            progress_every=args.ux_progress_every,
-            timestamp_scale=timestamp_scale,
-            time_scale_source=time_scale_source,
-            bootlog=args.bootlog,
-            boot_window_s=args.boot_window_s,
-        )
         try:
-            metrics = ux.analyze()
-        except OSError as exc:
-            print(f"Failed to read ETL file: {exc}", file=sys.stderr)
-            return 1
-        except RuntimeError as exc:
+            run_analysis_job(
+                etl_path=args.etl_path,
+                report_path=report_path,
+                metrics_output_path=metrics_path,
+                compare_metrics_path=args.compare,
+                compare_etl_path=args.compare_etl,
+                timeline_output_path=args.timeline_output,
+                timeline_format=args.timeline_format,
+                plot_dir=args.plot_dir,
+                plot_bin_s=args.plot_bin_s,
+                slow_io_ms=args.slow_io_ms,
+                top_n=args.top_n,
+                time_scale=args.time_scale,
+                bootlog=args.bootlog,
+                boot_window_s=args.boot_window_s,
+                debug=args.debug,
+                progress_every=args.ux_progress_every,
+                tracerpt_exe=args.tracerpt_exe,
+                use_tracerpt=not args.no_tracerpt,
+                use_etl_observer=not args.no_etl_observer,
+                force_etl_observer=args.force_etl_observer,
+                return_metrics=False,
+                return_baseline_metrics=False,
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 1
         except Exception as exc:  # pragma: no cover - unexpected
             print(f"Unhandled error: {exc}", file=sys.stderr)
             return 1
 
-        if metrics_path:
-            with open(metrics_path, "w", encoding="utf-8") as handle:
-                json.dump(metrics, handle, indent=2)
-
-        baseline = None
-        if args.compare:
-            try:
-                with open(args.compare, "r", encoding="utf-8") as handle:
-                    baseline = json.load(handle)
-            except OSError as exc:
-                print(f"Failed to read baseline metrics: {exc}", file=sys.stderr)
-                return 1
-        elif args.compare_etl:
-            baseline_ux = ETLUXAnalyzer(
-                args.compare_etl,
-                slow_io_ms=args.slow_io_ms,
-                top_n=args.top_n,
-                debug=args.debug,
-                progress_every=args.ux_progress_every,
-                timestamp_scale=timestamp_scale,
-                time_scale_source=time_scale_source,
-                bootlog=args.bootlog,
-                boot_window_s=args.boot_window_s,
-            )
-            try:
-                baseline = baseline_ux.analyze()
-            except OSError as exc:
-                print(f"Failed to read baseline ETL: {exc}", file=sys.stderr)
-                return 1
-            except RuntimeError as exc:
-                print(str(exc), file=sys.stderr)
-                return 1
-            except Exception as exc:  # pragma: no cover - unexpected
-                print(f"Unhandled error: {exc}", file=sys.stderr)
-                return 1
-            baseline_metrics_path = _derive_baseline_metrics_path(
-                metrics_path, report_path
-            )
-            with open(baseline_metrics_path, "w", encoding="utf-8") as handle:
-                json.dump(baseline, handle, indent=2)
-
-        if args.timeline_output:
-            trace_duration = metrics.get("trace", {}).get("duration_s") or 0.0
-            timeline_rows = _build_timeline_rows(
-                ux.pid_start_ts,
-                ux.pid_end_ts,
-                ux.pid_info,
-                ux.pid_first_io_ts,
-                ux.pid_first_image_ts,
-                trace_duration,
-            )
-            try:
-                _write_timeline_output(
-                    timeline_rows, args.timeline_output, args.timeline_format
-                )
-            except ValueError as exc:
-                print(str(exc), file=sys.stderr)
-                return 1
-
-        plot_paths: dict[str, str] = {}
-        if args.plot_dir:
-            trends = _collect_network_trends(
-                args.etl_path,
-                args.plot_bin_s,
-                timestamp_scale,
-                args.debug,
-                args.tracerpt_exe,
-                not args.no_tracerpt,
-                not args.no_etl_observer,
-                args.force_etl_observer,
-            )
-            plot_path = _write_network_throughput_plot(trends, args.plot_dir)
-            if plot_path and report_path:
-                report_dir = os.path.dirname(report_path) or "."
-                plot_paths["network_throughput"] = os.path.relpath(
-                    plot_path, report_dir
-                )
-
-        if report_path:
-            report_html = _render_report(metrics, baseline, plot_paths)
-            with open(report_path, "w", encoding="utf-8") as handle:
-                handle.write(report_html)
-
         return 0
+
+    try:
+        timestamp_scale, _ = _resolve_time_scale(args.etl_path, args.time_scale)
+    except ValueError as exc:
+        print(f"Invalid --time-scale: {exc}", file=sys.stderr)
+        return 1
 
     analyzer = ETLAnalyzer(
         args.etl_path,

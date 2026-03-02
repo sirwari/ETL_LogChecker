@@ -91,6 +91,11 @@ Run the interactive local runner to call all major functions without MCP:
 python etl_local_cli.py
 ```
 
+Launch the standalone desktop GUI to analyze ETLs, compare metrics, and review runs in one window:
+```bash
+python etl_logchecker.py --gui
+```
+
 Example menu:
 ```
 ETL Local Runner

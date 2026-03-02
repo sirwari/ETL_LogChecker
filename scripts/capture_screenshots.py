@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import json
 import os
 import re
@@ -13,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from etl_logchecker import _build_analysis_summary  # noqa: E402
 from etl_local_cli import render_menu_text  # noqa: E402
 from etl_runner import review_metrics  # noqa: E402
 SCREENSHOT_DIR = ROOT / "docs" / "screenshots"
@@ -112,6 +114,82 @@ def _render_text_image(text: str, output_path: Path) -> None:
     image.save(output_path)
 
 
+def _render_gui_mock_image(
+    summary_text: str,
+    metrics: dict[str, object],
+    output_path: Path,
+) -> None:
+    width = 1440
+    height = 920
+    image = Image.new("RGB", (width, height), "#edf2f7")
+    draw = ImageDraw.Draw(image)
+    font = ImageFont.load_default()
+
+    def box(x1: int, y1: int, x2: int, y2: int, fill: str, outline: str | None = None) -> None:
+        draw.rounded_rectangle((x1, y1, x2, y2), radius=18, fill=fill, outline=outline)
+
+    def write(text: str, x: int, y: int, fill: str = "#102a43") -> None:
+        draw.text((x, y), text, fill=fill, font=font)
+
+    box(24, 20, width - 24, 84, "#102a43")
+    write("ETL LogChecker Standalone GUI", 44, 42, "#f0f4f8")
+    write("Analyze ETL, compare metrics, and review output in one window.", 280, 42, "#d9e2ec")
+
+    box(24, 108, 380, height - 24, "#d9e2ec")
+    write("Analyze ETL", 44, 128)
+    labels = [
+        "ETL trace",
+        "Report output",
+        "Metrics output",
+        "Timeline output",
+        "Plot directory",
+        "Baseline metrics",
+        "Baseline ETL",
+    ]
+    y = 168
+    for label in labels:
+        write(label, 44, y)
+        box(44, y + 18, 356, y + 56, "#f8fbff", "#bcccdc")
+        y += 78
+
+    box(44, y + 8, 356, y + 56, "#1f6feb")
+    write("Run Analysis", 150, y + 25, "#ffffff")
+
+    box(404, 108, width - 24, 300, "#ffffff")
+    write("Analysis Summary", 432, 132)
+    summary_lines = summary_text.splitlines()[:9]
+    summary_y = 168
+    for line in summary_lines:
+        write(line[:120], 432, summary_y, "#334e68")
+        summary_y += 22
+
+    trace = metrics.get("trace", {}) if isinstance(metrics.get("trace"), dict) else {}
+    io = metrics.get("io", {}) if isinstance(metrics.get("io"), dict) else {}
+    boot = metrics.get("boot", {}) if isinstance(metrics.get("boot"), dict) else {}
+    cards = [
+        ("Trace", f"{trace.get('duration_s', 'n/a')} s"),
+        ("Events", str(trace.get("event_count", "n/a"))),
+        ("Slow I/O", f"{io.get('slow_time_s', 'n/a')} s"),
+        ("Boot", f"{boot.get('boot_duration_s', 'n/a')} s"),
+    ]
+    card_x = 404
+    for title, value in cards:
+        box(card_x, 324, card_x + 234, 430, "#ffffff")
+        write(title, card_x + 24, 348, "#486581")
+        write(value, card_x + 24, 382)
+        card_x += 252
+
+    box(404, 454, width - 24, height - 24, "#ffffff")
+    write("Metrics Preview", 432, 478)
+    metrics_text = json.dumps(metrics, indent=2).splitlines()[:18]
+    metrics_y = 516
+    for line in metrics_text:
+        write(line[:140], 432, metrics_y, "#243b53")
+        metrics_y += 20
+
+    image.save(output_path)
+
+
 def main() -> int:
     SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
     TMP_DIR.mkdir(parents=True, exist_ok=True)
@@ -133,6 +211,54 @@ def main() -> int:
     timeline_html = TMP_DIR / "timeline.html"
     timeline_csv = ROOT / "boot_timeline.csv"
     _write_html(timeline_html, _csv_to_table(timeline_csv))
+
+    current_metrics = json.loads((ROOT / "etl_metrics.json").read_text(encoding="utf-8"))
+    baseline_metrics = json.loads(
+        (ROOT / "etl_metricsBaseline.json").read_text(encoding="utf-8")
+    )
+    gui_preview_html = TMP_DIR / "standalone_gui.html"
+    gui_result = {
+        "metrics": current_metrics,
+        "baseline_metrics": baseline_metrics,
+        "comparison": {},
+        "metrics_path": str(ROOT / "etl_metrics.json"),
+        "baseline_metrics_path": str(ROOT / "etl_metricsBaseline.json"),
+        "report_path": str(ROOT / "boot_report.html"),
+        "timeline_path": str(ROOT / "boot_timeline.csv"),
+        "plot_paths": {},
+        "warnings": [],
+    }
+    gui_summary = _build_analysis_summary(
+        gui_result,
+        etl_path=str(ROOT / "bootLog.etl"),
+        compare_source=str(ROOT / "etl_metricsBaseline.json"),
+    )
+    gui_body = "\n".join(
+        [
+            "<h2>Standalone GUI Preview</h2>",
+            "<div style='display:grid;grid-template-columns:320px 1fr;gap:24px;'>",
+            "<section>",
+            "<h3>Inputs</h3>",
+            "<table><tbody>",
+            f"<tr><th>ETL trace</th><td>{html.escape(str(ROOT / 'bootLog.etl'))}</td></tr>",
+            f"<tr><th>Report</th><td>{html.escape(str(ROOT / 'boot_report.html'))}</td></tr>",
+            f"<tr><th>Metrics</th><td>{html.escape(str(ROOT / 'etl_metrics.json'))}</td></tr>",
+            f"<tr><th>Baseline</th><td>{html.escape(str(ROOT / 'etl_metricsBaseline.json'))}</td></tr>",
+            f"<tr><th>Timeline</th><td>{html.escape(str(ROOT / 'boot_timeline.csv'))}</td></tr>",
+            "</tbody></table>",
+            "<h3>Actions</h3>",
+            "<p>Analyze ETL, compare metrics, and review metrics with Ollama from one window.</p>",
+            "</section>",
+            "<section>",
+            "<h3>Analysis Summary</h3>",
+            f"<pre>{html.escape(gui_summary)}</pre>",
+            "<h3>Metrics JSON (preview)</h3>",
+            f"<pre>{html.escape(json.dumps(current_metrics, indent=2)[:9000])}</pre>",
+            "</section>",
+            "</div>",
+        ]
+    )
+    _write_html(gui_preview_html, gui_body)
 
     boot_report = ROOT / "boot_report.html"
     compare_report = ROOT / "reportCompare_testdieZweite.html"
@@ -175,6 +301,11 @@ def main() -> int:
             _capture_page(page, compare_report, SCREENSHOT_DIR / "report_compare.png")
             _capture_page(page, timeline_html, SCREENSHOT_DIR / "timeline_csv.png")
             _capture_page(page, review_html, SCREENSHOT_DIR / "review_output.png")
+            _capture_page(
+                page,
+                gui_preview_html,
+                SCREENSHOT_DIR / "feat-standalone-gui.png",
+            )
             browser.close()
     except Exception:
         menu_text = render_menu_text()
@@ -191,6 +322,12 @@ def main() -> int:
 
         review_text = review_pretty
         _render_text_image(review_text, SCREENSHOT_DIR / "review_output.png")
+
+        _render_gui_mock_image(
+            gui_summary,
+            current_metrics,
+            SCREENSHOT_DIR / "feat-standalone-gui.png",
+        )
 
     return 0
 
