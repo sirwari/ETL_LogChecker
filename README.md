@@ -211,6 +211,10 @@ If Playwright cannot download browsers, point it to a system Chrome:
 export PLAYWRIGHT_CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 ```
 
+If headless Chrome fails with macOS permission errors (e.g., `MachPortRendezvousServer`),
+the script falls back to text-based PNGs using Pillow. For full browser-rendered
+screenshots, run the capture script on a local machine with normal GUI permissions.
+
 ## Output Columns
 - `PID`
 - `Process Name`
