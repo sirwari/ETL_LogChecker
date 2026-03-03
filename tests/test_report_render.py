@@ -11,10 +11,13 @@ def test_render_report_shows_added_metrics():
             "duration_s": 12.0,
             "event_count": 120,
             "events_per_s": 10.0,
+            "process_count": 8,
+            "user_process_count": 6,
         },
         "boot": {
             "boot_duration_s": 5.0,
             "explorer_start_s": 4.0,
+            "boot_order_count": 2,
             "boot_order": [],
         },
         "io": {
@@ -44,9 +47,12 @@ def test_render_report_shows_added_metrics():
     html = _render_report(metrics)
 
     assert "Events / s" in html
+    assert "Processes" in html
+    assert "User processes" in html
     assert "Slow ops %" in html
     assert "Launch avg:" in html
     assert "Avg I/O bytes / op:" in html
+    assert "Boot order entries: 2" in html
 
 
 def test_format_review_diagnose_includes_backend_details():

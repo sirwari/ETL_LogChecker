@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from etl_logchecker import _build_analysis_summary  # noqa: E402
+from etl_logchecker import _build_analysis_summary, render_gui_quickstart_text  # noqa: E402
 from etl_local_cli import render_menu_text  # noqa: E402
 from etl_runner import review_metrics  # noqa: E402
 SCREENSHOT_DIR = ROOT / "docs" / "screenshots"
@@ -46,6 +46,11 @@ def _write_html(path: Path, body: str) -> None:
         ),
         encoding="utf-8",
     )
+
+
+def _markdown_to_pre(path: Path, title: str) -> str:
+    text = path.read_text(encoding="utf-8", errors="replace")
+    return f"<h2>{html.escape(title)}</h2><pre>{html.escape(text)}</pre>"
 
 
 def _csv_to_table(csv_path: Path, max_rows: int = 80) -> str:
@@ -87,22 +92,27 @@ def _render_text_image(text: str, output_path: Path) -> None:
     max_width = 1400
     padding = 20
 
-    words = text.split()
     lines: list[str] = []
-    line = ""
     draw_img = Image.new("RGB", (max_width, 100), "white")
     draw = ImageDraw.Draw(draw_img)
+    max_text_width = max_width - 2 * padding
 
-    for word in words:
-        test_line = f"{line} {word}".strip()
-        width = draw.textlength(test_line, font=font)
-        if width > max_width - 2 * padding:
+    for paragraph in text.splitlines() or [""]:
+        if not paragraph:
+            lines.append("")
+            continue
+        words = paragraph.split()
+        line = ""
+        for word in words:
+            test_line = f"{line} {word}".strip()
+            width = draw.textlength(test_line, font=font)
+            if width > max_text_width and line:
+                lines.append(line)
+                line = word
+            else:
+                line = test_line
+        if line:
             lines.append(line)
-            line = word
-        else:
-            line = test_line
-    if line:
-        lines.append(line)
 
     line_height = 16
     height = padding * 2 + line_height * max(len(lines), 1)
@@ -321,6 +331,21 @@ def main() -> int:
     review_pretty = json.dumps(review_data, indent=2)
     _write_html(review_html, f"<h2>Review Output</h2><pre>{review_pretty}</pre>")
 
+    quickstart_html = TMP_DIR / "gui_quickstart.html"
+    quickstart_doc = ROOT / "docs" / "GUI_QUICKSTART.md"
+    _write_html(
+        quickstart_html,
+        _markdown_to_pre(quickstart_doc, "GUI Quick Start")
+        + f"<h3>CLI Output</h3><pre>{html.escape(render_gui_quickstart_text())}</pre>",
+    )
+
+    tech_stack_html = TMP_DIR / "tech_stack.html"
+    tech_stack_doc = ROOT / "docs" / "TECH_STACK_AND_FUNCTIONS.md"
+    _write_html(
+        tech_stack_html,
+        _markdown_to_pre(tech_stack_doc, "Tech Stack And Functions"),
+    )
+
     timeline_html = TMP_DIR / "timeline.html"
     timeline_csv = ROOT / "boot_timeline.csv"
     _write_html(timeline_html, _csv_to_table(timeline_csv))
@@ -428,6 +453,16 @@ def main() -> int:
             )
             _capture_page(
                 page,
+                quickstart_html,
+                SCREENSHOT_DIR / "feat-gui-quickstart.png",
+            )
+            _capture_page(
+                page,
+                tech_stack_html,
+                SCREENSHOT_DIR / "feat-tech-stack-doc.png",
+            )
+            _capture_page(
+                page,
                 gui_preview_html,
                 SCREENSHOT_DIR / "feat-standalone-gui.png",
             )
@@ -448,6 +483,14 @@ def main() -> int:
         review_text = review_pretty
         _render_text_image(review_text, SCREENSHOT_DIR / "review_output.png")
         _render_text_image(review_text, SCREENSHOT_DIR / "feat-agentic-diagnose.png")
+        _render_text_image(
+            quickstart_doc.read_text(encoding="utf-8", errors="replace"),
+            SCREENSHOT_DIR / "feat-gui-quickstart.png",
+        )
+        _render_text_image(
+            tech_stack_doc.read_text(encoding="utf-8", errors="replace"),
+            SCREENSHOT_DIR / "feat-tech-stack-doc.png",
+        )
 
         _render_gui_mock_image(
             gui_summary,

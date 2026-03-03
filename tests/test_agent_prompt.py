@@ -6,11 +6,18 @@ import etl_agent
 def _sample_metrics():
     return {
         "metadata": {"etl_path": "test.etl"},
-        "trace": {"duration_s": 10.0, "event_count": 100, "events_per_s": 10.0},
+        "trace": {
+            "duration_s": 10.0,
+            "event_count": 100,
+            "events_per_s": 10.0,
+            "process_count": 4,
+            "user_process_count": 3,
+        },
         "boot": {
             "boot_duration_s": 4.0,
             "explorer_start_s": 3.0,
             "first_user_app_s": 5.0,
+            "boot_order_count": 1,
             "boot_order": [{"image": "explorer.exe", "start_s": 3.0}],
         },
         "io": {
@@ -43,6 +50,9 @@ def test_compact_summary_shape():
     assert "io" in summary
     assert "boot" in summary
     assert summary["trace"]["events_per_s"] == 10.0
+    assert summary["trace"]["process_count"] == 4
+    assert summary["trace"]["user_process_count"] == 3
+    assert summary["boot"]["boot_order_count"] == 1
     assert summary["io"]["slow_ops_pct"] == 0.12
     assert len(summary["top_processes"]["by_slow_time"]) == 1
     assert len(summary["top_files"]) == 1
