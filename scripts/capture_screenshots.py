@@ -5,6 +5,7 @@ import json
 import os
 import re
 import sys
+import textwrap
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -131,12 +132,47 @@ def _render_gui_mock_image(
     def write(text: str, x: int, y: int, fill: str = "#102a43") -> None:
         draw.text((x, y), text, fill=fill, font=font)
 
+    def wrap_text(text: str, max_width: int) -> list[str]:
+        wrapped: list[str] = []
+        for paragraph in text.splitlines() or [""]:
+            if not paragraph:
+                wrapped.append("")
+                continue
+            current = ""
+            for word in paragraph.split():
+                candidate = f"{current} {word}".strip()
+                if draw.textlength(candidate, font=font) <= max_width:
+                    current = candidate
+                    continue
+                if current:
+                    wrapped.append(current)
+                current = word
+            if current:
+                wrapped.append(current)
+        return wrapped
+
+    def write_wrapped(
+        text: str,
+        x: int,
+        y: int,
+        max_width: int,
+        max_lines: int,
+        fill: str = "#102a43",
+        line_height: int = 20,
+    ) -> int:
+        lines = wrap_text(text, max_width)[:max_lines]
+        for idx, line in enumerate(lines):
+            write(line, x, y + idx * line_height, fill)
+        return y + len(lines) * line_height
+
     box(24, 20, width - 24, 84, "#102a43")
     write("ETL LogChecker Standalone GUI", 44, 42, "#f0f4f8")
-    write(
+    write_wrapped(
         "Readable layout, inline help, and auto-generated output files.",
         310,
         42,
+        820,
+        2,
         "#d9e2ec",
     )
 
@@ -144,10 +180,12 @@ def _render_gui_mock_image(
 
     box(40, 126, 444, 370, "#f8fbff")
     write("Trace & Baseline", 60, 146)
-    write(
+    write_wrapped(
         "Pick the ETL to inspect. Baseline inputs are optional and only used for delta comparison.",
         60,
         172,
+        340,
+        3,
         "#486581",
     )
     source_labels = [
@@ -163,10 +201,12 @@ def _render_gui_mock_image(
 
     box(40, 392, 444, 676, "#f8fbff")
     write("Output Files", 60, 412)
-    write(
+    write_wrapped(
         "Auto mode creates report, metrics, timeline, and plot outputs next to the ETL using the ETL name.",
         60,
         438,
+        340,
+        4,
         "#486581",
     )
     box(60, 472, 388, 504, "#1d4ed8")
@@ -186,10 +226,12 @@ def _render_gui_mock_image(
 
     box(40, 698, 444, height - 40, "#f8fbff")
     write("Settings", 60, 718)
-    write(
+    write_wrapped(
         "Defaults are safe. Raise Top N for larger tables and enable debug only when needed.",
         60,
         744,
+        340,
+        3,
         "#486581",
     )
     settings_labels = [
@@ -209,10 +251,15 @@ def _render_gui_mock_image(
 
     box(484, 108, width - 24, 326, "#ffffff")
     write("Analysis Summary", 512, 132)
-    summary_lines = summary_text.splitlines()[:9]
+    summary_lines: list[str] = []
+    for raw_line in summary_text.splitlines():
+        if raw_line:
+            summary_lines.extend(wrap_text(raw_line, 600))
+        else:
+            summary_lines.append("")
     summary_y = 168
-    for line in summary_lines:
-        write(line[:130], 512, summary_y, "#334e68")
+    for line in summary_lines[:6]:
+        write(line, 512, summary_y, "#334e68")
         summary_y += 22
 
     trace = metrics.get("trace", {}) if isinstance(metrics.get("trace"), dict) else {}
@@ -242,10 +289,15 @@ def _render_gui_mock_image(
 
     box(484, 554, width - 24, height - 24, "#ffffff")
     write("Report HTML / Metrics Preview", 512, 578)
-    metrics_text = json.dumps(metrics, indent=2).splitlines()[:18]
+    metrics_preview = textwrap.shorten(
+        json.dumps(metrics, indent=2).replace("\n", " "),
+        width=2600,
+        placeholder=" ...",
+    )
+    metrics_text = wrap_text(metrics_preview, 930)[:18]
     metrics_y = 616
     for line in metrics_text:
-        write(line[:145], 512, metrics_y, "#243b53")
+        write(line, 512, metrics_y, "#243b53")
         metrics_y += 20
 
     image.save(output_path)
@@ -371,6 +423,11 @@ def main() -> int:
             _capture_page(page, review_html, SCREENSHOT_DIR / "review_output.png")
             _capture_page(
                 page,
+                review_html,
+                SCREENSHOT_DIR / "feat-agentic-diagnose.png",
+            )
+            _capture_page(
+                page,
                 gui_preview_html,
                 SCREENSHOT_DIR / "feat-standalone-gui.png",
             )
@@ -390,6 +447,7 @@ def main() -> int:
 
         review_text = review_pretty
         _render_text_image(review_text, SCREENSHOT_DIR / "review_output.png")
+        _render_text_image(review_text, SCREENSHOT_DIR / "feat-agentic-diagnose.png")
 
         _render_gui_mock_image(
             gui_summary,
