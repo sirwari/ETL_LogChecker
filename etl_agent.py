@@ -61,11 +61,14 @@ def compact_metrics_summary(metrics: dict[str, Any], top_n: int = 5) -> dict[str
             "duration_s": trace.get("duration_s"),
             "event_count": trace.get("event_count"),
             "events_per_s": trace.get("events_per_s"),
+            "process_count": trace.get("process_count"),
+            "user_process_count": trace.get("user_process_count"),
         },
         "boot": {
             "boot_duration_s": boot.get("boot_duration_s"),
             "explorer_start_s": boot.get("explorer_start_s"),
             "first_user_app_s": boot.get("first_user_app_s"),
+            "boot_order_count": boot.get("boot_order_count"),
             "boot_order": _take(boot.get("boot_order", []) or []),
         },
         "io": {

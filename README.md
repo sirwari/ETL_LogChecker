@@ -1,38 +1,23 @@
 # ETL_LogChecker
 
-Python 3.11+ CLI and MCP server for analyzing Windows Performance Recorder `.etl` files.
-It uses `etl-parser` with an optional `tracerpt.exe` fallback when providers are missing.
+ETL_LogChecker is a Python 3.11+ analyzer for Windows Performance Recorder `.etl`
+files. It provides a CLI, a standalone Tk GUI, and an MCP server for agentic
+workflows. The core implementation lives in `etl_logchecker.py`.
 
-## Functionality
-- Streams ETL events (no full in-memory load) for large traces.
-- Filters `Microsoft-Windows-Kernel-Process` (GUID `22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716`)
-  and `Microsoft-Windows-Kernel-Network`.
-- Maps `ProcessStart` to `ImageName`, tracks `ProcessStop`, and estimates CPU time
-  as process lifetime (start -> stop).
-- Aggregates network bytes sent/received per PID.
-- Outputs a summary table using `pandas` if available, or a formatted ASCII table.
-- Optional full XML event dump for downstream processing.
-- Optional UX/performance report with boot milestones, app launch latency proxies,
-  disk I/O wait time, and slow I/O offenders.
-- Optional timeline export (CSV/JSON) and throughput plots.
-- Built-in comparison against baseline metrics or a baseline ETL.
-- MCP tools for agentic workflows plus Ollama-backed review summaries.
-- Robust error handling for locked/corrupted ETL files.
+## Documentation
+- Full stack and function map: [docs/TECH_STACK_AND_FUNCTIONS.md](docs/TECH_STACK_AND_FUNCTIONS.md)
+- GUI install and usage guide: [docs/GUI_QUICKSTART.md](docs/GUI_QUICKSTART.md)
 
-## Requirements
-- Python 3.11+
-- `pip install -r requirements.txt`
-- Optional: `pip install pandas` for prettier tables.
-- Optional: `pip install matplotlib` for plot output.
-- Optional: `pip install pytest` for running tests.
-- Windows only for `tracerpt.exe` fallback (assumed on PATH).
+## Quick Start
+Use the built-in quick-start output at any time:
 
-## Usage
 ```bash
-python etl_logchecker.py <path-to-etl>
+python etl_logchecker.py --gui-quickstart
 ```
 
-Quick start scripts:
+Typical install and launch flow:
+
+macOS/Linux:
 ```bash
 ./install.sh
 ./start.sh
@@ -44,8 +29,68 @@ Windows PowerShell:
 .\start.ps1
 ```
 
-## Examples
-UX/Performance report + metrics JSON:
+If you want to bypass the helper scripts:
+
+```bash
+python etl_logchecker.py --gui
+```
+
+## What The GUI Does
+- Analyze one ETL and generate report, metrics JSON, timeline, and plots.
+- Compare current metrics JSON against a saved baseline.
+- Run Agentic Diagnose with Ollama-backed review or the built-in heuristic fallback.
+- Auto-create output file paths next to the selected ETL trace.
+
+## Core Functionality
+- Streams ETL events instead of loading the full trace into memory.
+- Falls back to `tracerpt.exe` when provider parsing is unavailable on Windows.
+- Tracks process lifetime, network I/O, launch latency, and boot milestones.
+- Generates HTML reports, JSON metrics, CSV/JSON timelines, and optional plots.
+- Supports saved-baseline comparisons and baseline ETL comparisons.
+- Exposes the same analysis flows through local Python APIs and an MCP server.
+
+## Main Outputs
+Analysis mode can produce:
+- HTML report
+- Metrics JSON
+- Timeline export (`.json` or `.csv`)
+- Network throughput plot
+- Optional XML event dump
+
+Key metrics surfaced in JSON and the HTML report include:
+- `trace.duration_s`
+- `trace.event_count`
+- `trace.events_per_s`
+- `trace.process_count`
+- `trace.user_process_count`
+- `io.slow_time_s`
+- `io.slow_time_pct`
+- `io.slow_ops`
+- `io.slow_ops_pct`
+- `io.avg_bytes_per_op`
+- `launch_latency.stats.avg_s`
+- `launch_latency.stats.p95_s`
+- `boot.boot_duration_s`
+- `boot.boot_order_count`
+
+## Requirements
+- Python 3.11+
+- `pip install -r requirements.txt`
+- Optional: `pip install pandas` for nicer CLI tables
+- Optional: `pip install matplotlib` for plot output
+- Optional: `pip install pytest` for local test runs
+- Optional: local Ollama for Agentic Diagnose
+- Windows only: `tracerpt.exe` fallback (expected on `PATH`)
+
+## CLI Usage
+Basic CLI analysis:
+
+```bash
+python etl_logchecker.py <path-to-etl>
+```
+
+Generate a report and metrics JSON:
+
 ```bash
 python etl_logchecker.py <path-to-etl> \
   --report report.html \
@@ -53,72 +98,52 @@ python etl_logchecker.py <path-to-etl> \
 ```
 
 Compare against a baseline metrics file:
-```bash
-python etl_logchecker.py <path-to-etl> \
-  --report report_compare.html \
-  --compare etl_metrics_baseline.json
-```
 
-Compare two ETLs directly:
 ```bash
 python etl_logchecker.py <path-to-etl> \
-  --compare-etl <baseline.etl> \
+  --compare etl_metrics_baseline.json \
   --report report_compare.html
 ```
 
-Bootlog analysis with timeline export:
+Compare against a baseline ETL:
+
+```bash
+python etl_logchecker.py <path-to-etl> \
+  --compare-etl baseline.etl \
+  --report report_compare.html
+```
+
+Bootlog analysis with a timeline export:
+
 ```bash
 python etl_logchecker.py bootLog.etl \
-  --bootlog --boot-window-s 300 \
+  --bootlog \
+  --boot-window-s 300 \
   --report boot_report.html \
   --metrics-output boot_metrics.json \
-  --timeline-output boot_timeline.csv --timeline-format csv
+  --timeline-output boot_timeline.csv \
+  --timeline-format csv
 ```
 
-Export per-process timeline JSON:
-```bash
-python etl_logchecker.py <path-to-etl> \
-  --timeline-output timeline.json --timeline-format json
-```
+## Local Runner
+The local text runner exposes the same major flows without MCP:
 
-Generate network throughput plot:
-```bash
-python etl_logchecker.py <path-to-etl> \
-  --plot-dir plots
-```
-
-Force time-scale override:
-```bash
-python etl_logchecker.py <path-to-etl> --time-scale ms
-```
-
-Full XML event dump for downstream processing (can be large):
-```bash
-python etl_logchecker.py <path-to-etl> --xml-output out.xml
-```
-
-## Local Usage (No MCP)
-Run the interactive local runner to call all major functions without MCP:
 ```bash
 python etl_local_cli.py
 ```
 
-Launch the standalone desktop GUI to analyze ETLs, compare metrics, and review runs in one window:
-```bash
-python etl_logchecker.py --gui
-```
+Menu:
 
-Example menu:
-```
+```text
 ETL Local Runner
 1. Analyze ETL (report/metrics/timeline/plot/bootlog)
 2. Compare metrics JSON
 3. Compare ETL vs baseline ETL
-4. Review metrics via Ollama
+4. Agentic diagnose via Ollama
 5. Quit
 ```
 
-Programmatic local usage (no MCP):
+## Programmatic Usage
 ```python
 from etl_runner import analyze_etl, compare_metrics, review_metrics
 
@@ -139,15 +164,15 @@ review = review_metrics(
 )
 ```
 
-## MCP Server (Agentic Use)
-This repo includes an MCP server that exposes ETL analysis + comparison tools over stdio.
-
+## MCP Server
 Start the server:
+
 ```bash
 python etl_mcp_server.py
 ```
 
 Example MCP client config:
+
 ```json
 {
   "mcpServers": {
@@ -164,111 +189,29 @@ Available tools:
 - `compare_metrics`
 - `review_metrics`
 
-Ollama environment variables (optional):
+## Ollama Notes
+Environment variables:
 - `OLLAMA_HOST` (default: `http://localhost:11434`)
 - `OLLAMA_MODEL` (default: `gptoss20b`)
 
-## Agentic Example With Ollama
-1. Start Ollama:
+Typical setup:
+
 ```bash
 ollama serve
-```
-2. Pull the model (if needed):
-```bash
 ollama pull gptoss20b
 ```
-3. Call `review_metrics` via MCP:
-```json
-{
-  "tool": "review_metrics",
-  "arguments": {
-    "current": "etl_metrics.json",
-    "baseline": "etl_metrics_baseline.json",
-    "focus": "Boot duration and slow I/O regressions",
-    "temperature": 0.2,
-    "max_tokens": 800
-  }
-}
-```
 
-## Agentic Examples (MCP Tool Calls)
-Analyze + generate report and metrics:
-```json
-{
-  "tool": "analyze_etl",
-  "arguments": {
-    "etl_path": "current.etl",
-    "report_path": "report.html",
-    "metrics_output_path": "etl_metrics.json",
-    "bootlog": true,
-    "boot_window_s": 300
-  }
-}
-```
+If Ollama is unavailable, Agentic Diagnose falls back to the built-in heuristic
+summary and reports that status in the GUI and returned JSON.
 
-Compare multiple runs against a baseline:
-```json
-{
-  "tool": "compare_metrics",
-  "arguments": {
-    "current": ["run1.json", "run2.json", "run3.json"],
-    "baseline": "baseline.json"
-  }
-}
-```
-
-## Proof Screenshots (Dev)
+## Dev Proof Screenshots
 ```bash
 pip install -r requirements-dev.txt
 python scripts/capture_screenshots.py
 ```
 
-If Playwright cannot download browsers, point it to a system Chrome:
-```bash
-export PLAYWRIGHT_CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-```
-
-If headless Chrome fails with macOS permission errors (e.g., `MachPortRendezvousServer`),
-the script falls back to text-based PNGs using Pillow. For full browser-rendered
-screenshots, run the capture script on a local machine with normal GUI permissions.
-
-## Output Columns
-- `PID`
-- `Process Name`
-- `CPU Time (est, s)`
-- `Network I/O (sent/recv bytes)`
-
-## Options
-- `--output <path>`: write output to a file (default: stdout)
-- `--xml-output <path>`: write a full XML event dump to a file
-- `--format auto|pandas|table` (default: auto)
-- `--sort cpu|net|pid` (default: cpu)
-- `--max-rows <n>` (default: 50)
-- `--tracerpt-exe <path>`: override tracerpt path
-- `--no-tracerpt`: disable fallback
-- `--no-etl-observer`: disable etl observer fallback (loads entire file into memory)
-- `--force-etl-observer`: force etl observer fallback even for large ETL files
-- `--report <path>`: write a self-contained HTML UX/performance report
-- `--metrics-output <path>`: write a metrics JSON file for later comparison
-- `--compare <metrics.json>`: compare against a baseline metrics file in the report
-- `--compare-etl <baseline.etl>`: compare against a baseline ETL file in the report
-- `--slow-io-ms <n>`: slow I/O threshold in milliseconds (default: 50)
-- `--top-n <n>`: top N rows in report sections (default: 10)
-- `--time-scale <auto|ns|us|ms|s|float>`: timestamp scale override
-- `--timeline-output <path>`: write per-process timeline to a file
-- `--timeline-format <csv|json>`: timeline output format (default: json)
-- `--plot-dir <path>`: write matplotlib plots to this directory
-- `--plot-bin-s <n>`: time bin size for plots in seconds (default: 1.0)
-- `--bootlog`: enable bootlog-specific metrics and report sections
-- `--boot-window-s <n>`: boot window length for boot order capture (default: 300)
-- `--ux-progress-every <n>`: log UX analysis progress every N events (debug only)
-- `--debug`: verbose logging
-
-## Known Limitations
-- CPU time is estimated from ProcessStart -> ProcessStop (not true CPU usage).
-- Network direction is inferred from event naming; unknown direction is tracked
-  but not displayed separately.
-- `etl-parser` event schema can vary by version; the parser probes common APIs.
-
-## Plan
-See `PLAN.md` for the roadmap and next steps.
+Feature screenshots used for PRs:
+- [docs/screenshots/feat-standalone-gui.png](docs/screenshots/feat-standalone-gui.png)
+- [docs/screenshots/feat-agentic-diagnose.png](docs/screenshots/feat-agentic-diagnose.png)
+- [docs/screenshots/feat-gui-quickstart.png](docs/screenshots/feat-gui-quickstart.png)
+- [docs/screenshots/feat-tech-stack-doc.png](docs/screenshots/feat-tech-stack-doc.png)

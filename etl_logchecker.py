@@ -332,6 +332,24 @@ def _safe_div(numerator: float, denominator: float) -> float:
     return numerator / denominator
 
 
+def render_gui_quickstart_text() -> str:
+    return "\n".join(
+        [
+            "ETL LogChecker GUI Quick Start",
+            "1. Install dependencies and the virtual environment.",
+            "   macOS/Linux: ./install.sh",
+            "   Windows PowerShell: .\\install.ps1",
+            "2. Launch the GUI.",
+            "   macOS/Linux: ./start.sh",
+            "   Windows PowerShell: .\\start.ps1",
+            "3. In the GUI, choose an ETL trace and leave Auto-create output files enabled.",
+            "4. Click Run Analysis to generate the report, metrics JSON, timeline, and plots.",
+            "5. Use Compare Metrics for saved JSON comparisons and Agentic Diagnose for Ollama-backed review.",
+            "Optional: run `python etl_logchecker.py --gui` directly if you do not want to use the helper scripts.",
+        ]
+    )
+
+
 def _shorten_chart_label(value: Any, max_length: int = 14) -> str:
     text = str(value).strip()
     if len(text) <= max_length:
@@ -1630,6 +1648,12 @@ class ETLUXAnalyzer:
                 }
             )
         process_lifetimes.sort(key=lambda r: r["lifetime_s"], reverse=True)
+        process_count = len(process_lifetimes)
+        user_process_count = sum(
+            1
+            for pid in self.pid_start_ts
+            if (self._safe_int(self.pid_info.get(pid, {}).get("session_id")) or 0) > 0
+        )
 
         io_quantiles = self.quantiles.values()
         io_percentiles = {
@@ -1705,6 +1729,7 @@ class ETLUXAnalyzer:
             boot_data["boot_order"] = sorted(
                 self.boot_order, key=lambda r: r.get("start_s") or 0.0
             )[: self.top_n]
+        boot_data["boot_order_count"] = len(boot_data.get("boot_order", []) or [])
 
         metadata = {
             "etl_path": self.etl_path,
@@ -1725,6 +1750,8 @@ class ETLUXAnalyzer:
                 "events_per_s": _safe_div(float(self.event_count), trace_duration)
                 if trace_duration > 0
                 else None,
+                "process_count": process_count,
+                "user_process_count": user_process_count,
             },
             "boot": boot_data,
             "launch_latency": {
@@ -2206,9 +2233,12 @@ def _render_report(
     slow_ops_pct = float(io.get("slow_ops_pct", 0.0) or 0.0) * 100.0
     duration_s = trace.get("duration_s", 0.0) or 0.0
     events_per_s = trace.get("events_per_s")
+    process_count = trace.get("process_count")
+    user_process_count = trace.get("user_process_count")
     avg_bytes_per_op = io.get("avg_bytes_per_op")
     launch_p95 = launch_stats.get("p95_s")
     launch_avg = launch_stats.get("avg_s")
+    boot_order_count = boot.get("boot_order_count")
 
     launch_top = launch.get("top", [])
     slow_top = metrics.get("top_processes", {}).get("by_slow_time", [])
@@ -2318,9 +2348,14 @@ def _render_report(
         ["p99", _format_seconds(io_percentiles.get("p99_s"))],
     ]
 
+    boot_summary_parts = []
+    if boot_duration is not None:
+        boot_summary_parts.append(f"Boot duration: {_format_seconds(boot_duration)}")
+    if boot_order_count is not None:
+        boot_summary_parts.append(f"Boot order entries: {int(boot_order_count)}")
     boot_summary = (
-        f'<div class="subtitle">Boot duration: {_format_seconds(boot_duration)}</div>'
-        if boot_duration is not None
+        f'<div class="subtitle">{" • ".join(boot_summary_parts)}</div>'
+        if boot_summary_parts
         else ""
     )
     boot_order_rows = [
@@ -2554,6 +2589,8 @@ def _render_report(
     <div class="cards">
       <div class="card"><h3>Trace duration</h3><div class="value">{_format_seconds(duration_s)}</div></div>
       <div class="card"><h3>Events / s</h3><div class="value">{f"{events_per_s:.2f}" if events_per_s is not None else "n/a"}</div></div>
+      <div class="card"><h3>Processes</h3><div class="value">{int(process_count) if process_count is not None else "n/a"}</div></div>
+      <div class="card"><h3>User processes</h3><div class="value">{int(user_process_count) if user_process_count is not None else "n/a"}</div></div>
       <div class="card"><h3>Slow I/O time</h3><div class="value">{_format_seconds(io.get("slow_time_s"))}</div></div>
       <div class="card"><h3>Slow I/O %</h3><div class="value">{slow_pct:.2f}%</div></div>
       <div class="card"><h3>Slow ops %</h3><div class="value">{slow_ops_pct:.2f}%</div></div>
@@ -2578,6 +2615,8 @@ def _render_report(
         <span><strong>Launch avg:</strong> {_format_seconds(launch_avg)}</span>
         <span><strong>Launch p50:</strong> {_format_seconds(launch_stats.get("p50_s"))}</span>
         <span><strong>Launch p95:</strong> {_format_seconds(launch_p95)}</span>
+        <span><strong>Tracked processes:</strong> {int(process_count) if process_count is not None else "n/a"}</span>
+        <span><strong>User processes:</strong> {int(user_process_count) if user_process_count is not None else "n/a"}</span>
         <span><strong>Avg I/O bytes / op:</strong> {_format_bytes(avg_bytes_per_op)}</span>
       </div>
       {_render_bar_chart(launch_top, "startup_latency_s", "image", "s")}
@@ -2873,6 +2912,14 @@ def _build_analysis_summary(
             if trace.get("events_per_s") is not None
             else "n/a"
         ),
+        "Processes: "
+        + (
+            f"{int(trace.get('process_count'))} total / "
+            f"{int(trace.get('user_process_count'))} user"
+            if trace.get("process_count") is not None
+            and trace.get("user_process_count") is not None
+            else "n/a"
+        ),
         f"Slow I/O time: {_format_seconds(io.get('slow_time_s'))}",
         f"Slow I/O %: {(float(io.get('slow_time_pct', 0.0) or 0.0) * 100.0):.2f}%",
         f"Slow ops %: {(float(io.get('slow_ops_pct', 0.0) or 0.0) * 100.0):.2f}%",
@@ -2880,6 +2927,7 @@ def _build_analysis_summary(
         f"I/O p99: {_format_seconds(io_percentiles.get('p99_s'))}",
         f"Launch p95: {_format_seconds(launch_stats.get('p95_s'))}",
         f"Boot duration: {_format_seconds(boot.get('boot_duration_s'))}",
+        f"Boot order entries: {int(boot.get('boot_order_count', 0) or 0)}",
     ]
 
     if compare_source:
@@ -3871,6 +3919,11 @@ def main() -> int:
         action="store_true",
         help="Launch the standalone GUI.",
     )
+    parser.add_argument(
+        "--gui-quickstart",
+        action="store_true",
+        help="Print the GUI quick start guide and exit.",
+    )
     parser.add_argument("--output", help="Output path (default: stdout)")
     parser.add_argument("--xml-output", help="Write a full XML event dump to path")
     parser.add_argument("--format", choices=["auto", "pandas", "table"], default="auto")
@@ -3937,6 +3990,10 @@ def main() -> int:
     )
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     args = parser.parse_args()
+
+    if args.gui_quickstart:
+        print(render_gui_quickstart_text())
+        return 0
 
     if args.gui:
         return launch_standalone_gui(args.etl_path)
