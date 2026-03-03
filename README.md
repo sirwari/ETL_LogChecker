@@ -32,6 +32,18 @@ It uses `etl-parser` with an optional `tracerpt.exe` fallback when providers are
 python etl_logchecker.py <path-to-etl>
 ```
 
+Quick start scripts:
+```bash
+./install.sh
+./start.sh
+```
+
+Windows PowerShell:
+```powershell
+.\install.ps1
+.\start.ps1
+```
+
 ## Examples
 UX/Performance report + metrics JSON:
 ```bash

@@ -332,6 +332,15 @@ def _safe_div(numerator: float, denominator: float) -> float:
     return numerator / denominator
 
 
+def _shorten_chart_label(value: Any, max_length: int = 14) -> str:
+    text = str(value).strip()
+    if len(text) <= max_length:
+        return text
+    if max_length <= 3:
+        return text[:max_length]
+    return text[: max_length - 3] + "..."
+
+
 class ETLAnalyzer:
     KERNEL_PROCESS_GUID = "22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716"
     KERNEL_PROCESS_NAME = "Microsoft-Windows-Kernel-Process"
@@ -1591,6 +1600,11 @@ class ETLUXAnalyzer:
         latency_values_sorted = sorted(latency_values)
         latency_stats = {
             "count": len(latency_values_sorted),
+            "avg_s": (
+                sum(latency_values_sorted) / len(latency_values_sorted)
+                if latency_values_sorted
+                else None
+            ),
             "p50_s": latency_values_sorted[int(0.5 * (len(latency_values_sorted) - 1))]
             if latency_values_sorted
             else None,
@@ -1708,6 +1722,9 @@ class ETLUXAnalyzer:
                 "end_ts": self.end_ts,
                 "duration_s": trace_duration,
                 "event_count": self.event_count,
+                "events_per_s": _safe_div(float(self.event_count), trace_duration)
+                if trace_duration > 0
+                else None,
             },
             "boot": boot_data,
             "launch_latency": {
@@ -1717,7 +1734,15 @@ class ETLUXAnalyzer:
             "io": {
                 "total_ops": self.total_io_ops,
                 "total_bytes": self.total_io_bytes,
+                "avg_bytes_per_op": _safe_div(
+                    float(self.total_io_bytes), float(self.total_io_ops)
+                )
+                if self.total_io_ops > 0
+                else 0.0,
                 "slow_ops": self.slow_io_ops,
+                "slow_ops_pct": _safe_div(float(self.slow_io_ops), float(self.total_io_ops))
+                if self.total_io_ops > 0
+                else 0.0,
                 "slow_time_s": self.total_slow_io_time_s,
                 "slow_time_pct": _safe_div(self.total_slow_io_time_s, trace_duration)
                 if trace_duration > 0
@@ -1960,7 +1985,7 @@ def _render_bar_chart(
     chart_width = width - padding * 2
     chart_height = height - padding * 2
     bar_width = chart_width / max(bar_count, 1)
-    parts = [f'<svg viewBox="0 0 {width} {height}">']
+    parts = [f'<svg class="chart-svg" viewBox="0 0 {width} {height}">']
     parts.append(
         "<defs>"
         '<linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">'
@@ -1972,22 +1997,26 @@ def _render_bar_chart(
     parts.append(f'<rect x="0" y="0" width="{width}" height="{height}" fill="none"/>')
     for idx, item in enumerate(items):
         value = float(item.get(value_key, 0) or 0)
-        label = _html_escape(str(item.get(label_key, "")))
+        label = str(item.get(label_key, ""))
+        short_label = _shorten_chart_label(label)
         bar_height = (value / max_value) * chart_height
         x = padding + idx * bar_width
         y = padding + (chart_height - bar_height)
+        parts.append("<g>")
+        parts.append(f"<title>{_html_escape(label)}</title>")
         parts.append(
             f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_width * 0.7:.1f}" '
             f'height="{bar_height:.1f}" rx="4" fill="url(#barGradient)"/>'
         )
         parts.append(
             f'<text x="{x + bar_width * 0.35:.1f}" y="{height - 8}" '
-            f'text-anchor="middle" class="chart-label">{label}</text>'
+            f'text-anchor="middle" class="chart-label">{_html_escape(short_label)}</text>'
         )
         parts.append(
             f'<text x="{x + bar_width * 0.35:.1f}" y="{y - 6:.1f}" '
             f'text-anchor="middle" class="chart-value">{value:.2f}{unit}</text>'
         )
+        parts.append("</g>")
     parts.append("</svg>")
     return "".join(parts)
 
@@ -2017,7 +2046,7 @@ def _render_timeline(milestones: dict[str, float | None]) -> str:
     height = 100
     padding = 40
     chart_width = width - padding * 2
-    parts = ['<div class="timeline">', f'<svg viewBox="0 0 {width} {height}">']
+    parts = ['<div class="timeline">', f'<svg class="chart-svg" viewBox="0 0 {width} {height}">']
     parts.append(
         f'<line x1="{padding}" y1="{height/2:.1f}" x2="{width - padding}" '
         f'y2="{height/2:.1f}" stroke="#8892a6" stroke-width="2" />'
@@ -2064,7 +2093,7 @@ def _render_histogram(hist: dict[str, int]) -> str:
     chart_width = width - padding * 2
     chart_height = height - padding * 2
     bar_width = chart_width / max(len(labels), 1)
-    parts = [f'<svg viewBox="0 0 {width} {height}">']
+    parts = [f'<svg class="chart-svg" viewBox="0 0 {width} {height}">']
     for idx, label in enumerate(labels):
         value = hist[label]
         bar_height = (value / max_count) * chart_height
@@ -2090,7 +2119,10 @@ def _render_table(headers: list[str], rows: list[list[str]]) -> str:
     for row in rows:
         cells = "".join(f"<td>{_html_escape(str(cell))}</td>" for cell in row)
         body_rows.append(f"<tr>{cells}</tr>")
-    return f"<table><thead><tr>{header_html}</tr></thead><tbody>{''.join(body_rows)}</tbody></table>"
+    return (
+        '<div class="table-wrap"><table><thead><tr>'
+        f"{header_html}</tr></thead><tbody>{''.join(body_rows)}</tbody></table></div>"
+    )
 
 
 def _compare_metrics(current: dict[str, Any], baseline: dict[str, Any]) -> dict[str, Any]:
@@ -2109,6 +2141,10 @@ def _compare_metrics(current: dict[str, Any], baseline: dict[str, Any]) -> dict[
 
     comparisons = {
         "duration_s": (get_path(current, "trace", "duration_s"), get_path(baseline, "trace", "duration_s")),
+        "slow_io_ops_pct": (
+            get_path(current, "io", "slow_ops_pct"),
+            get_path(baseline, "io", "slow_ops_pct"),
+        ),
         "slow_io_time_s": (
             get_path(current, "io", "slow_time_s"),
             get_path(baseline, "io", "slow_time_s"),
@@ -2124,6 +2160,10 @@ def _compare_metrics(current: dict[str, Any], baseline: dict[str, Any]) -> dict[
         "io_p99_s": (
             get_path(current, "io", "percentiles_s", "p99_s"),
             get_path(baseline, "io", "percentiles_s", "p99_s"),
+        ),
+        "launch_p95_s": (
+            get_path(current, "launch_latency", "stats", "p95_s"),
+            get_path(baseline, "launch_latency", "stats", "p95_s"),
         ),
         "explorer_start_s": (
             get_path(current, "boot", "explorer_start_s"),
@@ -2151,18 +2191,26 @@ def _render_report(
     baseline: dict[str, Any] | None = None,
     plot_paths: dict[str, str] | None = None,
 ) -> str:
+    trace = metrics.get("trace", {}) or {}
     boot = metrics.get("boot", {})
     boot_order = boot.get("boot_order", []) or []
     boot_duration = boot.get("boot_duration_s")
     io = metrics.get("io", {})
     io_percentiles = io.get("percentiles_s", {})
+    launch = metrics.get("launch_latency", {}) or {}
+    launch_stats = launch.get("stats", {}) or {}
     comparison = _compare_metrics(metrics, baseline) if baseline else None
     plot_paths = plot_paths or {}
 
     slow_pct = io.get("slow_time_pct", 0.0) * 100.0
-    duration_s = metrics.get("trace", {}).get("duration_s", 0.0) or 0.0
+    slow_ops_pct = float(io.get("slow_ops_pct", 0.0) or 0.0) * 100.0
+    duration_s = trace.get("duration_s", 0.0) or 0.0
+    events_per_s = trace.get("events_per_s")
+    avg_bytes_per_op = io.get("avg_bytes_per_op")
+    launch_p95 = launch_stats.get("p95_s")
+    launch_avg = launch_stats.get("avg_s")
 
-    launch_top = metrics.get("launch_latency", {}).get("top", [])
+    launch_top = launch.get("top", [])
     slow_top = metrics.get("top_processes", {}).get("by_slow_time", [])
     slow_ops_top = metrics.get("top_processes", {}).get("by_slow_ops", [])
     io_bytes_top = metrics.get("top_processes", {}).get("by_io_bytes", [])
@@ -2172,10 +2220,12 @@ def _render_report(
     if comparison:
         for label, key, formatter in (
             ("Trace duration", "duration_s", _format_seconds),
+            ("Slow I/O ops %", "slow_io_ops_pct", lambda v: f"{v * 100:.2f}%"),
             ("Slow I/O time", "slow_io_time_s", _format_seconds),
             ("Slow I/O %", "slow_io_pct", lambda v: f"{v * 100:.2f}%"),
             ("I/O p95", "io_p95_s", _format_seconds),
             ("I/O p99", "io_p99_s", _format_seconds),
+            ("Launch p95", "launch_p95_s", _format_seconds),
             ("Explorer start", "explorer_start_s", _format_seconds),
             ("Boot duration", "boot_duration_s", _format_seconds),
         ):
@@ -2184,12 +2234,23 @@ def _render_report(
             base = entry.get("baseline")
             delta = entry.get("delta")
             pct = entry.get("pct")
+            is_time_metric = (
+                "duration" in key
+                or "time" in key
+                or key.startswith("io_p")
+                or key.startswith("launch_")
+                or key.endswith("_start_s")
+            )
             comparison_rows.append(
                 [
                     label,
                     formatter(cur) if cur is not None else "n/a",
                     formatter(base) if base is not None else "n/a",
-                    _format_seconds(delta) if "duration" in key or "time" in key or "io_p" in key else f"{delta * 100:.2f}%" if delta is not None else "n/a",
+                    _format_seconds(delta)
+                    if is_time_metric
+                    else f"{delta * 100:.2f}%"
+                    if delta is not None
+                    else "n/a",
                     f"{pct * 100:.2f}%" if pct is not None else "n/a",
                 ]
             )
@@ -2336,6 +2397,8 @@ def _render_report(
     .subtitle {{
       color: var(--muted);
       margin-bottom: 24px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
     }}
     .cards {{
       display: grid;
@@ -2374,12 +2437,16 @@ def _render_report(
     table {{
       width: 100%;
       border-collapse: collapse;
+      table-layout: fixed;
       font-size: 13px;
     }}
     th, td {{
       text-align: left;
       padding: 8px;
       border-bottom: 1px solid #e3e7f0;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }}
     th {{
       color: var(--muted);
@@ -2391,6 +2458,10 @@ def _render_report(
     .empty {{
       color: var(--muted);
       padding: 8px 0;
+    }}
+    .table-wrap {{
+      width: 100%;
+      overflow-x: auto;
     }}
     .timeline {{
       display: grid;
@@ -2446,6 +2517,13 @@ def _render_report(
       display: block;
       border-radius: 12px;
       background: #ffffff;
+      object-fit: contain;
+    }}
+    .chart-svg {{
+      width: 100%;
+      height: auto;
+      display: block;
+      overflow: visible;
     }}
     .chart-label {{
       font-size: 10px;
@@ -2454,6 +2532,17 @@ def _render_report(
     .chart-value {{
       font-size: 10px;
       fill: var(--text);
+    }}
+    .metric-inline {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 20px;
+      margin: 8px 0 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }}
+    .metric-inline strong {{
+      color: var(--text);
     }}
   </style>
 </head>
@@ -2464,9 +2553,12 @@ def _render_report(
 
     <div class="cards">
       <div class="card"><h3>Trace duration</h3><div class="value">{_format_seconds(duration_s)}</div></div>
+      <div class="card"><h3>Events / s</h3><div class="value">{f"{events_per_s:.2f}" if events_per_s is not None else "n/a"}</div></div>
       <div class="card"><h3>Slow I/O time</h3><div class="value">{_format_seconds(io.get("slow_time_s"))}</div></div>
       <div class="card"><h3>Slow I/O %</h3><div class="value">{slow_pct:.2f}%</div></div>
+      <div class="card"><h3>Slow ops %</h3><div class="value">{slow_ops_pct:.2f}%</div></div>
       <div class="card"><h3>I/O p95</h3><div class="value">{_format_seconds(io_percentiles.get("p95_s"))}</div></div>
+      <div class="card"><h3>Launch p95</h3><div class="value">{_format_seconds(launch_p95)}</div></div>
     </div>
 
     {f'<div class="section"><h2>Comparison to baseline</h2>{_render_table(["Metric", "Current", "Baseline", "Delta", "Delta %"], comparison_rows)}</div>' if comparison else ''}
@@ -2482,6 +2574,12 @@ def _render_report(
 
     <div class="section">
       <h2>App launch latency (proxy)</h2>
+      <div class="metric-inline">
+        <span><strong>Launch avg:</strong> {_format_seconds(launch_avg)}</span>
+        <span><strong>Launch p50:</strong> {_format_seconds(launch_stats.get("p50_s"))}</span>
+        <span><strong>Launch p95:</strong> {_format_seconds(launch_p95)}</span>
+        <span><strong>Avg I/O bytes / op:</strong> {_format_bytes(avg_bytes_per_op)}</span>
+      </div>
       {_render_bar_chart(launch_top, "startup_latency_s", "image", "s")}
       {_render_table(["Image", "PID", "Session", "Latency", "First signal"], launch_rows)}
       <div class="subtitle">Latency is derived from first disk I/O or image load after process start.</div>
@@ -2762,15 +2860,25 @@ def _build_analysis_summary(
     io = metrics.get("io", {}) or {}
     boot = metrics.get("boot", {}) or {}
     io_percentiles = io.get("percentiles_s", {}) or {}
+    launch = metrics.get("launch_latency", {}) or {}
+    launch_stats = launch.get("stats", {}) or {}
 
     lines = [
         f"ETL file: {etl_path or metrics.get('metadata', {}).get('etl_path') or 'n/a'}",
         f"Events: {trace.get('event_count', 'n/a')}",
         f"Trace duration: {_format_seconds(trace.get('duration_s'))}",
+        "Events / s: "
+        + (
+            f"{float(trace.get('events_per_s')):.2f}"
+            if trace.get("events_per_s") is not None
+            else "n/a"
+        ),
         f"Slow I/O time: {_format_seconds(io.get('slow_time_s'))}",
         f"Slow I/O %: {(float(io.get('slow_time_pct', 0.0) or 0.0) * 100.0):.2f}%",
+        f"Slow ops %: {(float(io.get('slow_ops_pct', 0.0) or 0.0) * 100.0):.2f}%",
         f"I/O p95: {_format_seconds(io_percentiles.get('p95_s'))}",
         f"I/O p99: {_format_seconds(io_percentiles.get('p99_s'))}",
+        f"Launch p95: {_format_seconds(launch_stats.get('p95_s'))}",
         f"Boot duration: {_format_seconds(boot.get('boot_duration_s'))}",
     ]
 
@@ -2816,6 +2924,63 @@ def _build_analysis_summary(
             if isinstance(pct, (int, float)):
                 pct_text = f"{pct * 100:.2f}%"
             lines.append(f"- {key}: delta={delta_text}, pct={pct_text}")
+
+    return "\n".join(lines)
+
+
+def _format_review_item(item: Any) -> str:
+    if isinstance(item, dict):
+        label = (
+            item.get("label")
+            or item.get("metric")
+            or item.get("title")
+            or item.get("image")
+        )
+        if label:
+            text = str(label)
+            pct = item.get("pct")
+            if isinstance(pct, (int, float)):
+                text += f" ({pct * 100:.2f}%)"
+            return text
+        return _format_json_block(item)
+    return str(item)
+
+
+def _format_review_diagnose(result: dict[str, Any]) -> str:
+    backend = result.get("backend", {}) or {}
+    insights = result.get("insights", {}) or {}
+    provider = str(backend.get("provider") or "ollama").title()
+    used_ollama = bool(backend.get("used_ollama"))
+    status = "Connected" if used_ollama else "Heuristic fallback"
+
+    lines = [
+        f"Agentic Diagnose ({provider})",
+        f"Status: {status}",
+        f"Host: {backend.get('host') or 'n/a'}",
+        f"Model: {backend.get('model') or 'n/a'}",
+    ]
+
+    error = backend.get("error")
+    if error:
+        lines.append(f"Fallback reason: {error}")
+
+    summary = insights.get("summary")
+    if summary:
+        lines.extend(["", "Summary", str(summary)])
+
+    for section_title, key in (
+        ("Observations", "observations"),
+        ("Regressions", "regressions"),
+        ("Improvements", "improvements"),
+        ("Recommendations", "recommendations"),
+        ("Questions", "questions"),
+    ):
+        items = insights.get(key)
+        if not items:
+            continue
+        lines.extend(["", section_title])
+        for item in items:
+            lines.append(f"- {_format_review_item(item)}")
 
     return "\n".join(lines)
 
@@ -2922,7 +3087,7 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             review_tab = ttk_module.Frame(notebook, padding=12)
             notebook.add(analyze_tab, text="Analyze ETL")
             notebook.add(compare_tab, text="Compare Metrics")
-            notebook.add(review_tab, text="Review Metrics")
+            notebook.add(review_tab, text="Agentic Diagnose")
 
             self._build_analyze_tab(analyze_tab, ttk_module)
             self._build_compare_tab(compare_tab, ttk_module)
@@ -3304,14 +3469,14 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             results.add(report_frame, text="Report HTML")
 
             self.analysis_summary_text = self._new_text_area(summary_frame, height=18)
-            self.analysis_metrics_text = self._new_text_area(metrics_frame, wrap="none")
+            self.analysis_metrics_text = self._new_text_area(metrics_frame, wrap="char")
             self.analysis_baseline_text = self._new_text_area(
-                baseline_frame, wrap="none"
+                baseline_frame, wrap="char"
             )
             self.analysis_comparison_text = self._new_text_area(
-                comparison_frame, wrap="none"
+                comparison_frame, wrap="char"
             )
-            self.analysis_report_text = self._new_text_area(report_frame, wrap="none")
+            self.analysis_report_text = self._new_text_area(report_frame, wrap="char")
 
         def _build_compare_tab(
             self,
@@ -3363,7 +3528,7 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             output_frame.grid(row=2, column=0, sticky="nsew")
             output_frame.columnconfigure(0, weight=1)
             output_frame.rowconfigure(0, weight=1)
-            self.compare_output_text = self._new_text_area(output_frame, wrap="none")
+            self.compare_output_text = self._new_text_area(output_frame, wrap="char")
 
         def _build_review_tab(
             self,
@@ -3377,14 +3542,15 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                 parent,
                 0,
                 text=(
-                    "Review runs the Ollama-based summary when available. If Ollama is not "
-                    "reachable, the app shows the built-in heuristic fallback instead."
+                    "Agentic Diagnose runs the Ollama-backed review when available. If "
+                    "Ollama is not reachable, the app shows the built-in heuristic "
+                    "fallback and explains why."
                 ),
                 wraplength=960,
                 columnspan=1,
             )
 
-            controls = ttk_module.LabelFrame(parent, text="Review Metrics With Ollama")
+            controls = ttk_module.LabelFrame(parent, text="Agentic Diagnose With Ollama")
             controls.grid(row=1, column=0, sticky="ew")
             controls.columnconfigure(1, weight=1)
 
@@ -3450,7 +3616,7 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
 
             ttk_module.Button(
                 controls,
-                text="Run Review",
+                text="Run Agentic Diagnose",
                 command=self._run_review,
             ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
@@ -3458,7 +3624,7 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             output_frame.grid(row=2, column=0, sticky="nsew")
             output_frame.columnconfigure(0, weight=1)
             output_frame.rowconfigure(0, weight=1)
-            self.review_output_text = self._new_text_area(output_frame, wrap="none")
+            self.review_output_text = self._new_text_area(output_frame, wrap="word")
 
         def _apply_suggested_output_paths(self, force: bool) -> None:
             if not self.auto_output_files_var.get() and not force:
@@ -3665,7 +3831,7 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                 )
                 return
 
-            self.status_var.set("Running review...")
+            self.status_var.set("Running agentic diagnose...")
             self.root.update_idletasks()
 
             try:
@@ -3682,12 +3848,15 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                     return_raw=False,
                 )
             except Exception as exc:
-                self.status_var.set("Review failed.")
-                messagebox.showerror("Review failed", str(exc))
+                self.status_var.set("Agentic diagnose failed.")
+                messagebox.showerror("Agentic diagnose failed", str(exc))
                 return
 
-            self._set_text(self.review_output_text, _format_json_block(result))
-            self.status_var.set("Review complete.")
+            self._set_text(self.review_output_text, _format_review_diagnose(result))
+            if result.get("heuristic_fallback"):
+                self.status_var.set("Agentic diagnose complete (heuristic fallback).")
+            else:
+                self.status_var.set("Agentic diagnose complete (Ollama connected).")
 
     app = _StandaloneGUI()
     app.root.mainloop()

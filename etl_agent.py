@@ -10,21 +10,25 @@ from etl_logchecker import _compare_metrics
 
 NEUTRAL_BAND_PCT = 0.05
 SCORE_WEIGHTS = {
-    "duration_s": 0.2,
+    "duration_s": 0.15,
     "slow_io_time_s": 0.2,
-    "slow_io_pct": 0.2,
+    "slow_io_pct": 0.15,
+    "slow_io_ops_pct": 0.1,
     "io_p95_s": 0.1,
-    "io_p99_s": 0.1,
+    "io_p99_s": 0.05,
+    "launch_p95_s": 0.1,
     "explorer_start_s": 0.1,
-    "boot_duration_s": 0.1,
+    "boot_duration_s": 0.05,
 }
 
 METRIC_LABELS = {
     "duration_s": "Trace duration",
     "slow_io_time_s": "Slow I/O time",
     "slow_io_pct": "Slow I/O %",
+    "slow_io_ops_pct": "Slow I/O ops %",
     "io_p95_s": "I/O p95",
     "io_p99_s": "I/O p99",
+    "launch_p95_s": "Launch p95",
     "explorer_start_s": "Explorer start",
     "boot_duration_s": "Boot duration",
 }
@@ -56,6 +60,7 @@ def compact_metrics_summary(metrics: dict[str, Any], top_n: int = 5) -> dict[str
         "trace": {
             "duration_s": trace.get("duration_s"),
             "event_count": trace.get("event_count"),
+            "events_per_s": trace.get("events_per_s"),
         },
         "boot": {
             "boot_duration_s": boot.get("boot_duration_s"),
@@ -66,8 +71,11 @@ def compact_metrics_summary(metrics: dict[str, Any], top_n: int = 5) -> dict[str
         "io": {
             "total_ops": io.get("total_ops"),
             "total_bytes": io.get("total_bytes"),
+            "avg_bytes_per_op": io.get("avg_bytes_per_op"),
+            "slow_ops": io.get("slow_ops"),
             "slow_time_s": io.get("slow_time_s"),
             "slow_time_pct": io.get("slow_time_pct"),
+            "slow_ops_pct": io.get("slow_ops_pct"),
             "percentiles_s": io.get("percentiles_s", {}) or {},
         },
         "launch_latency": {
@@ -248,6 +256,14 @@ def review_with_llm(
 
     host = ollama_host or os.environ.get("OLLAMA_HOST", "http://localhost:11434")
     model_name = model or os.environ.get("OLLAMA_MODEL", "gptoss20b")
+    backend = {
+        "provider": "ollama",
+        "host": host,
+        "model": model_name,
+        "status": "pending",
+        "used_ollama": False,
+        "error": None,
+    }
 
     system_prompt = (
         "You are a performance analysis assistant. "
@@ -276,17 +292,23 @@ def review_with_llm(
         )
         content = raw_response.get("message", {}).get("content", "")
         parsed = json.loads(content)
+        backend["status"] = "ok"
+        backend["used_ollama"] = True
         return {
             "insights": parsed,
             "comparison": comparison_result,
             "raw_llm": content if return_raw else None,
+            "backend": backend,
             "heuristic_fallback": False,
         }
-    except Exception:
+    except Exception as exc:
+        backend["status"] = "fallback"
+        backend["error"] = str(exc)
         fallback = _fallback_insights(summary, comparison_result)
         return {
             "insights": fallback,
             "comparison": comparison_result,
             "raw_llm": raw_response if return_raw else None,
+            "backend": backend,
             "heuristic_fallback": True,
         }

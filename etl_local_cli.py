@@ -74,7 +74,7 @@ def render_menu_text() -> str:
             "1. Analyze ETL (report/metrics/timeline/plot/bootlog)",
             "2. Compare metrics JSON",
             "3. Compare ETL vs baseline ETL",
-            "4. Review metrics via Ollama",
+            "4. Agentic diagnose via Ollama",
             "5. Quit",
         ]
     )
@@ -159,6 +159,9 @@ def _handle_review() -> None:
         focus=focus,
     )
     print("\nReview complete:")
+    backend = result.get("backend", {}) or {}
+    print(f"  backend_status: {backend.get('status')}")
+    print(f"  backend_model: {backend.get('model')}")
     print(f"  heuristic_fallback: {result.get('heuristic_fallback')}")
     print("  insights keys:", list(result.get("insights", {}).keys()))
 

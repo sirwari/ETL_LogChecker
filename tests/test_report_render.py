@@ -1,0 +1,77 @@
+from etl_logchecker import _format_review_diagnose, _render_report
+
+
+def test_render_report_shows_added_metrics():
+    metrics = {
+        "metadata": {
+            "generated_at": "2026-03-03T12:00:00Z",
+            "etl_path": "sample.etl",
+        },
+        "trace": {
+            "duration_s": 12.0,
+            "event_count": 120,
+            "events_per_s": 10.0,
+        },
+        "boot": {
+            "boot_duration_s": 5.0,
+            "explorer_start_s": 4.0,
+            "boot_order": [],
+        },
+        "io": {
+            "total_ops": 50,
+            "total_bytes": 4096,
+            "avg_bytes_per_op": 81.92,
+            "slow_ops": 5,
+            "slow_ops_pct": 0.1,
+            "slow_time_s": 1.5,
+            "slow_time_pct": 0.125,
+            "percentiles_s": {"p50_s": 0.1, "p95_s": 0.5, "p99_s": 1.0},
+            "histogram": {"<= 1 ms": 10},
+        },
+        "launch_latency": {
+            "stats": {"avg_s": 0.6, "p50_s": 0.5, "p95_s": 0.9},
+            "top": [{"image": "app.exe", "pid": 1, "session_id": 1, "startup_latency_s": 0.9, "first_signal": "disk_io"}],
+        },
+        "top_processes": {
+            "by_slow_time": [{"image": "app.exe", "pid": 1, "slow_time_s": 1.0, "slow_ops": 2}],
+            "by_slow_ops": [{"image": "app.exe", "pid": 1, "slow_ops": 2, "slow_time_s": 1.0}],
+            "by_io_bytes": [{"image": "app.exe", "pid": 1, "io_bytes": 2048, "io_ops": 3}],
+        },
+        "top_files": [{"file": "C:/trace/file.bin", "slow_time_s": 0.5, "slow_ops": 1}],
+        "process_lifetimes": [{"image": "app.exe", "pid": 1, "lifetime_s": 10.0}],
+    }
+
+    html = _render_report(metrics)
+
+    assert "Events / s" in html
+    assert "Slow ops %" in html
+    assert "Launch avg:" in html
+    assert "Avg I/O bytes / op:" in html
+
+
+def test_format_review_diagnose_includes_backend_details():
+    result = {
+        "backend": {
+            "provider": "ollama",
+            "host": "http://localhost:11434",
+            "model": "gptoss20b",
+            "used_ollama": False,
+            "status": "fallback",
+            "error": "connection refused",
+        },
+        "insights": {
+            "summary": "Fallback summary.",
+            "observations": ["Slow I/O stable."],
+            "regressions": [{"label": "Launch p95", "pct": 0.12}],
+            "improvements": [],
+            "recommendations": ["Check the Ollama service."],
+            "questions": [],
+        },
+    }
+
+    text = _format_review_diagnose(result)
+
+    assert "Agentic Diagnose (Ollama)" in text
+    assert "Status: Heuristic fallback" in text
+    assert "Fallback reason: connection refused" in text
+    assert "- Launch p95 (12.00%)" in text
