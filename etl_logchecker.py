@@ -2722,6 +2722,36 @@ def _format_json_block(data: Any) -> str:
     return json.dumps(data, indent=2, sort_keys=True)
 
 
+def _format_html_block(text: str | None) -> str:
+    if not text:
+        return ""
+    return text.replace("><", ">\n<")
+
+
+def _resolve_analysis_output_paths(
+    etl_path: str | None,
+    auto_generate: bool,
+    report_path: str | None = None,
+    metrics_output_path: str | None = None,
+    timeline_output_path: str | None = None,
+    plot_dir: str | None = None,
+) -> dict[str, str | None]:
+    if auto_generate:
+        suggested = _suggest_output_paths(etl_path)
+        return {
+            "report_path": suggested.get("report_path") or None,
+            "metrics_output_path": suggested.get("metrics_output_path") or None,
+            "timeline_output_path": suggested.get("timeline_output_path") or None,
+            "plot_dir": suggested.get("plot_dir") or None,
+        }
+    return {
+        "report_path": report_path or None,
+        "metrics_output_path": metrics_output_path or None,
+        "timeline_output_path": timeline_output_path or None,
+        "plot_dir": plot_dir or None,
+    }
+
+
 def _build_analysis_summary(
     result: dict[str, Any],
     etl_path: str | None = None,
@@ -2793,6 +2823,7 @@ def _build_analysis_summary(
 def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
     try:
         import tkinter as tk
+        import tkinter.font as tkfont
         from tkinter import filedialog, messagebox, scrolledtext, ttk
     except Exception as exc:  # pragma: no cover - depends on runtime environment
         print(f"Tkinter is not available: {exc}", file=sys.stderr)
@@ -2802,18 +2833,20 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
         def __init__(self) -> None:
             self.root = tk.Tk()
             self.root.title("ETL LogChecker")
-            self.root.geometry("1280x900")
-            self.root.minsize(1100, 760)
+            self.root.geometry("1440x960")
+            self.root.minsize(1200, 820)
 
             self.status_var = tk.StringVar(
                 value="Ready. Pick an ETL trace or metrics files to begin."
             )
 
             self.analyze_etl_var = tk.StringVar(value=initial_etl_path or "")
+            self.auto_output_files_var = tk.BooleanVar(value=True)
             self.report_path_var = tk.StringVar()
             self.metrics_output_var = tk.StringVar()
             self.timeline_output_var = tk.StringVar()
             self.plot_dir_var = tk.StringVar()
+            self.output_help_var = tk.StringVar()
             self.compare_metrics_var = tk.StringVar()
             self.compare_etl_var = tk.StringVar()
             self.tracerpt_exe_var = tk.StringVar()
@@ -2843,18 +2876,35 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             )
             self.review_temperature_var = tk.DoubleVar(value=0.2)
             self.review_max_tokens_var = tk.IntVar(value=800)
+            self._analysis_output_controls: list[tuple[Any, Any]] = []
 
-            self._configure_style()
+            self._configure_style(tkfont)
             self._build_layout(scrolledtext, ttk)
             self._apply_suggested_output_paths(force=False)
+            self._update_output_mode_ui()
 
-        def _configure_style(self) -> None:
+        def _configure_style(self, tkfont_module: Any) -> None:
             style = ttk.Style(self.root)
             if "clam" in style.theme_names():
                 style.theme_use("clam")
+            self.default_font = tkfont_module.nametofont("TkDefaultFont")
+            self.default_font.configure(size=11)
+            self.text_font = tkfont_module.nametofont("TkTextFont")
+            self.text_font.configure(size=11)
+            self.fixed_font = tkfont_module.nametofont("TkFixedFont")
+            self.fixed_font.configure(size=11)
+            title_font = self.default_font.copy()
+            title_font.configure(size=12, weight="bold")
             style.configure("TLabelframe", padding=10)
-            style.configure("TLabelframe.Label", font=("Helvetica", 11, "bold"))
+            style.configure("TLabelframe.Label", font=title_font)
             style.configure("TButton", padding=(10, 6))
+            style.configure("TNotebook.Tab", padding=(14, 8))
+            style.configure(
+                "Help.TLabel",
+                foreground="#475569",
+                justify="left",
+            )
+            style.configure("Section.TLabel", font=title_font)
 
         def _build_layout(self, scrolledtext_module: Any, ttk_module: Any) -> None:
             self.root.columnconfigure(0, weight=1)
@@ -2893,9 +2943,10 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             variable: Any,
             mode: str,
             filetypes: list[tuple[str, str]] | None = None,
-        ) -> None:
+        ) -> tuple[Any, Any]:
             ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", pady=4)
-            ttk.Entry(parent, textvariable=variable).grid(
+            entry = ttk.Entry(parent, textvariable=variable)
+            entry.grid(
                 row=row, column=1, sticky="ew", padx=(8, 8), pady=4
             )
             button = ttk.Button(
@@ -2908,6 +2959,32 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                 ),
             )
             button.grid(row=row, column=2, sticky="ew", pady=4)
+            return entry, button
+
+        def _build_help_label(
+            self,
+            parent: Any,
+            row: int,
+            text: str | None = None,
+            textvariable: Any | None = None,
+            wraplength: int = 520,
+            columnspan: int = 3,
+        ) -> Any:
+            label = ttk.Label(
+                parent,
+                text=text,
+                textvariable=textvariable,
+                style="Help.TLabel",
+                wraplength=wraplength,
+            )
+            label.grid(
+                row=row,
+                column=0,
+                columnspan=columnspan,
+                sticky="ew",
+                pady=(0, 8),
+            )
+            return label
 
         def _choose_path(
             self,
@@ -2946,7 +3023,15 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             wrap: str = "word",
             height: int = 12,
         ) -> Any:
-            widget = scrolledtext.ScrolledText(parent, wrap=wrap, height=height)
+            font = self.text_font if wrap == "word" else self.fixed_font
+            widget = scrolledtext.ScrolledText(
+                parent,
+                wrap=wrap,
+                height=height,
+                font=font,
+                spacing1=2,
+                spacing3=2,
+            )
             widget.grid(sticky="nsew")
             return widget
 
@@ -2961,18 +3046,27 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             parent: Any,
             ttk_module: Any,
         ) -> None:
-            parent.columnconfigure(0, weight=1)
-            parent.rowconfigure(1, weight=1)
+            parent.columnconfigure(1, weight=1)
+            parent.rowconfigure(0, weight=1)
 
-            controls = ttk_module.LabelFrame(parent, text="Inputs & Options")
-            controls.grid(row=0, column=0, sticky="ew")
-            controls.columnconfigure(1, weight=1)
-            for idx in range(3):
-                controls.columnconfigure(idx, weight=1 if idx == 1 else 0)
+            controls = ttk_module.Frame(parent)
+            controls.grid(row=0, column=0, sticky="ns", padx=(0, 14))
 
-            row = 0
+            source_section = ttk_module.LabelFrame(controls, text="Trace & Baseline")
+            source_section.grid(row=0, column=0, sticky="ew")
+            source_section.columnconfigure(1, weight=1)
+            self._build_help_label(
+                source_section,
+                0,
+                text=(
+                    "Choose the ETL you want to inspect. Baseline inputs are optional and "
+                    "are only used when you want a delta comparison."
+                ),
+                wraplength=360,
+            )
+            row = 1
             self._build_path_row(
-                controls,
+                source_section,
                 row,
                 "ETL trace",
                 self.analyze_etl_var,
@@ -2981,25 +3075,62 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             )
             row += 1
             self._build_path_row(
-                controls,
+                source_section,
+                row,
+                "Baseline metrics",
+                self.compare_metrics_var,
+                "open",
+                [("JSON", "*.json"), ("All files", "*.*")],
+            )
+            row += 1
+            self._build_path_row(
+                source_section,
+                row,
+                "Baseline ETL",
+                self.compare_etl_var,
+                "open",
+                [("ETL files", "*.etl"), ("All files", "*.*")],
+            )
+
+            output_section = ttk_module.LabelFrame(controls, text="Output Files")
+            output_section.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+            output_section.columnconfigure(1, weight=1)
+            self._build_help_label(
+                output_section,
+                0,
+                textvariable=self.output_help_var,
+                wraplength=360,
+            )
+            ttk_module.Checkbutton(
+                output_section,
+                text="Auto-create report, metrics, timeline, and plot outputs",
+                variable=self.auto_output_files_var,
+                command=self._toggle_auto_output_mode,
+            ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(0, 8))
+            self._analysis_output_controls = []
+            row = 2
+            entry, button = self._build_path_row(
+                output_section,
                 row,
                 "Report output",
                 self.report_path_var,
                 "save",
                 [("HTML", "*.html"), ("All files", "*.*")],
             )
+            self._analysis_output_controls.append((entry, button))
             row += 1
-            self._build_path_row(
-                controls,
+            entry, button = self._build_path_row(
+                output_section,
                 row,
                 "Metrics output",
                 self.metrics_output_var,
                 "save",
                 [("JSON", "*.json"), ("All files", "*.*")],
             )
+            self._analysis_output_controls.append((entry, button))
             row += 1
-            self._build_path_row(
-                controls,
+            entry, button = self._build_path_row(
+                output_section,
                 row,
                 "Timeline output",
                 self.timeline_output_var,
@@ -3010,39 +3141,46 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                     ("All files", "*.*"),
                 ],
             )
+            self._analysis_output_controls.append((entry, button))
             row += 1
-            self._build_path_row(controls, row, "Plot directory", self.plot_dir_var, "dir")
-            row += 1
-            self._build_path_row(
-                controls,
+            entry, button = self._build_path_row(
+                output_section,
                 row,
-                "Baseline metrics",
-                self.compare_metrics_var,
-                "open",
-                [("JSON", "*.json"), ("All files", "*.*")],
+                "Plot directory",
+                self.plot_dir_var,
+                "dir",
             )
-            row += 1
-            self._build_path_row(
-                controls,
-                row,
-                "Baseline ETL",
-                self.compare_etl_var,
-                "open",
-                [("ETL files", "*.etl"), ("All files", "*.*")],
+            self._analysis_output_controls.append((entry, button))
+
+            settings_section = ttk_module.LabelFrame(controls, text="Settings")
+            settings_section.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+            settings_section.columnconfigure(1, weight=1)
+            self._build_help_label(
+                settings_section,
+                0,
+                text=(
+                    "Use the defaults first. Increase Top N for larger tables, and only "
+                    "enable debug logging when you need parser progress details."
+                ),
+                wraplength=360,
             )
-            row += 1
             self._build_path_row(
-                controls,
-                row,
+                settings_section,
+                1,
                 "tracerpt.exe",
                 self.tracerpt_exe_var,
                 "open",
                 [("Executable", "*.exe"), ("All files", "*.*")],
             )
-            row += 1
 
-            numeric_frame = ttk_module.Frame(controls)
-            numeric_frame.grid(row=row, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+            numeric_frame = ttk_module.Frame(settings_section)
+            numeric_frame.grid(
+                row=2,
+                column=0,
+                columnspan=3,
+                sticky="ew",
+                pady=(8, 0),
+            )
             for idx in range(6):
                 numeric_frame.columnconfigure(idx, weight=1)
 
@@ -3100,8 +3238,10 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                 width=10,
             ).grid(row=1, column=5, sticky="ew")
 
-            flag_frame = ttk_module.Frame(controls)
-            flag_frame.grid(row=row + 1, column=0, columnspan=3, sticky="ew", pady=(10, 0))
+            flag_frame = ttk_module.Frame(settings_section)
+            flag_frame.grid(
+                row=3, column=0, columnspan=3, sticky="ew", pady=(10, 0)
+            )
             for idx in range(5):
                 flag_frame.columnconfigure(idx, weight=1)
 
@@ -3132,22 +3272,15 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             ).grid(row=0, column=4, sticky="w")
 
             button_frame = ttk_module.Frame(controls)
-            button_frame.grid(
-                row=row + 2, column=0, columnspan=3, sticky="ew", pady=(12, 0)
-            )
-            ttk_module.Button(
-                button_frame,
-                text="Suggest Outputs",
-                command=lambda: self._apply_suggested_output_paths(force=True),
-            ).grid(row=0, column=0, sticky="w")
+            button_frame.grid(row=3, column=0, sticky="ew", pady=(12, 0))
             ttk_module.Button(
                 button_frame,
                 text="Run Analysis",
                 command=self._run_analysis,
-            ).grid(row=0, column=1, sticky="w", padx=(8, 0))
+            ).grid(row=0, column=0, sticky="ew")
 
             results = ttk_module.Notebook(parent)
-            results.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
+            results.grid(row=0, column=1, sticky="nsew")
 
             summary_frame = ttk_module.Frame(results, padding=10)
             metrics_frame = ttk_module.Frame(results, padding=10)
@@ -3186,10 +3319,21 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             ttk_module: Any,
         ) -> None:
             parent.columnconfigure(0, weight=1)
-            parent.rowconfigure(1, weight=1)
+            parent.rowconfigure(2, weight=1)
+
+            self._build_help_label(
+                parent,
+                0,
+                text=(
+                    "Compare two existing metrics JSON files. This does not re-run ETL "
+                    "analysis; it only scores deltas between saved outputs."
+                ),
+                wraplength=960,
+                columnspan=1,
+            )
 
             controls = ttk_module.LabelFrame(parent, text="Compare Existing Metrics")
-            controls.grid(row=0, column=0, sticky="ew")
+            controls.grid(row=1, column=0, sticky="ew")
             controls.columnconfigure(1, weight=1)
 
             self._build_path_row(
@@ -3216,7 +3360,7 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             ).grid(row=2, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
             output_frame = ttk_module.Frame(parent, padding=(0, 12, 0, 0))
-            output_frame.grid(row=1, column=0, sticky="nsew")
+            output_frame.grid(row=2, column=0, sticky="nsew")
             output_frame.columnconfigure(0, weight=1)
             output_frame.rowconfigure(0, weight=1)
             self.compare_output_text = self._new_text_area(output_frame, wrap="none")
@@ -3227,10 +3371,21 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             ttk_module: Any,
         ) -> None:
             parent.columnconfigure(0, weight=1)
-            parent.rowconfigure(1, weight=1)
+            parent.rowconfigure(2, weight=1)
+
+            self._build_help_label(
+                parent,
+                0,
+                text=(
+                    "Review runs the Ollama-based summary when available. If Ollama is not "
+                    "reachable, the app shows the built-in heuristic fallback instead."
+                ),
+                wraplength=960,
+                columnspan=1,
+            )
 
             controls = ttk_module.LabelFrame(parent, text="Review Metrics With Ollama")
-            controls.grid(row=0, column=0, sticky="ew")
+            controls.grid(row=1, column=0, sticky="ew")
             controls.columnconfigure(1, weight=1)
 
             self._build_path_row(
@@ -3300,12 +3455,15 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
             output_frame = ttk_module.Frame(parent, padding=(0, 12, 0, 0))
-            output_frame.grid(row=1, column=0, sticky="nsew")
+            output_frame.grid(row=2, column=0, sticky="nsew")
             output_frame.columnconfigure(0, weight=1)
             output_frame.rowconfigure(0, weight=1)
             self.review_output_text = self._new_text_area(output_frame, wrap="none")
 
         def _apply_suggested_output_paths(self, force: bool) -> None:
+            if not self.auto_output_files_var.get() and not force:
+                self._refresh_output_help()
+                return
             suggestions = _suggest_output_paths(self.analyze_etl_var.get().strip() or None)
             for key, variable in (
                 ("report_path", self.report_path_var),
@@ -3315,6 +3473,47 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             ):
                 if force or not variable.get().strip():
                     variable.set(suggestions.get(key, ""))
+            self._refresh_output_help()
+
+        def _refresh_output_help(self) -> None:
+            etl_path = self.analyze_etl_var.get().strip() or None
+            if self.auto_output_files_var.get():
+                if not etl_path:
+                    self.output_help_var.set(
+                        "Auto mode is on. Choose an ETL and the app will create "
+                        "report, metrics, timeline, and plot outputs next to it."
+                    )
+                    return
+                suggested = _suggest_output_paths(etl_path)
+                self.output_help_var.set(
+                    "Auto mode is on. Files will be created automatically using the ETL "
+                    "name: "
+                    f"{os.path.basename(suggested['report_path'])}, "
+                    f"{os.path.basename(suggested['metrics_output_path'])}, "
+                    f"{os.path.basename(suggested['timeline_output_path'])}, and "
+                    f"{os.path.basename(suggested['plot_dir'])}/."
+                )
+                return
+            self.output_help_var.set(
+                "Auto mode is off. Edit the paths below to control which artifacts are "
+                "written. Leave a field blank to skip that output."
+            )
+
+        def _update_output_mode_ui(self) -> None:
+            auto_mode = bool(self.auto_output_files_var.get())
+            for entry, button in self._analysis_output_controls:
+                if auto_mode:
+                    entry.state(["readonly"])
+                    button.state(["disabled"])
+                else:
+                    entry.state(["!readonly", "!disabled"])
+                    button.state(["!disabled"])
+            self._refresh_output_help()
+
+        def _toggle_auto_output_mode(self) -> None:
+            if self.auto_output_files_var.get():
+                self._apply_suggested_output_paths(force=True)
+            self._update_output_mode_ui()
 
         def _sync_followup_paths(self, result: dict[str, Any]) -> None:
             metrics_path = result.get("metrics_path")
@@ -3344,17 +3543,25 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                 self.compare_metrics_var.get().strip()
                 or self.compare_etl_var.get().strip()
             )
+            outputs = _resolve_analysis_output_paths(
+                etl_path=etl_path,
+                auto_generate=bool(self.auto_output_files_var.get()),
+                report_path=self.report_path_var.get().strip() or None,
+                metrics_output_path=self.metrics_output_var.get().strip() or None,
+                timeline_output_path=self.timeline_output_var.get().strip() or None,
+                plot_dir=self.plot_dir_var.get().strip() or None,
+            )
 
             try:
                 result = run_analysis_job(
                     etl_path=etl_path,
-                    report_path=self.report_path_var.get().strip() or None,
-                    metrics_output_path=self.metrics_output_var.get().strip() or None,
+                    report_path=outputs["report_path"],
+                    metrics_output_path=outputs["metrics_output_path"],
                     compare_metrics_path=self.compare_metrics_var.get().strip() or None,
                     compare_etl_path=self.compare_etl_var.get().strip() or None,
-                    timeline_output_path=self.timeline_output_var.get().strip() or None,
+                    timeline_output_path=outputs["timeline_output_path"],
                     timeline_format=self.timeline_format_var.get().strip() or "json",
-                    plot_dir=self.plot_dir_var.get().strip() or None,
+                    plot_dir=outputs["plot_dir"],
                     plot_bin_s=float(self.plot_bin_s_var.get()),
                     slow_io_ms=int(self.slow_io_ms_var.get()),
                     top_n=int(self.top_n_var.get()),
@@ -3410,7 +3617,7 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             report_text = result.get("report_html") or _read_text_file(result.get("report_path"))
             self._set_text(
                 self.analysis_report_text,
-                report_text or "No HTML report was generated.",
+                _format_html_block(report_text) or "No HTML report was generated.",
             )
 
             self._sync_followup_paths(result)

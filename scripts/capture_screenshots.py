@@ -119,9 +119,9 @@ def _render_gui_mock_image(
     metrics: dict[str, object],
     output_path: Path,
 ) -> None:
-    width = 1440
-    height = 920
-    image = Image.new("RGB", (width, height), "#edf2f7")
+    width = 1520
+    height = 980
+    image = Image.new("RGB", (width, height), "#e7edf5")
     draw = ImageDraw.Draw(image)
     font = ImageFont.load_default()
 
@@ -133,34 +133,86 @@ def _render_gui_mock_image(
 
     box(24, 20, width - 24, 84, "#102a43")
     write("ETL LogChecker Standalone GUI", 44, 42, "#f0f4f8")
-    write("Analyze ETL, compare metrics, and review output in one window.", 280, 42, "#d9e2ec")
+    write(
+        "Readable layout, inline help, and auto-generated output files.",
+        310,
+        42,
+        "#d9e2ec",
+    )
 
-    box(24, 108, 380, height - 24, "#d9e2ec")
-    write("Analyze ETL", 44, 128)
-    labels = [
+    box(24, 108, 460, height - 24, "#d7e0eb")
+
+    box(40, 126, 444, 370, "#f8fbff")
+    write("Trace & Baseline", 60, 146)
+    write(
+        "Pick the ETL to inspect. Baseline inputs are optional and only used for delta comparison.",
+        60,
+        172,
+        "#486581",
+    )
+    source_labels = [
         "ETL trace",
-        "Report output",
-        "Metrics output",
-        "Timeline output",
-        "Plot directory",
         "Baseline metrics",
         "Baseline ETL",
     ]
-    y = 168
-    for label in labels:
-        write(label, 44, y)
-        box(44, y + 18, 356, y + 56, "#f8fbff", "#bcccdc")
-        y += 78
+    y = 208
+    for label in source_labels:
+        write(label, 60, y)
+        box(60, y + 18, 420, y + 56, "#ffffff", "#bcccdc")
+        y += 70
 
-    box(44, y + 8, 356, y + 56, "#1f6feb")
-    write("Run Analysis", 150, y + 25, "#ffffff")
+    box(40, 392, 444, 676, "#f8fbff")
+    write("Output Files", 60, 412)
+    write(
+        "Auto mode creates report, metrics, timeline, and plot outputs next to the ETL using the ETL name.",
+        60,
+        438,
+        "#486581",
+    )
+    box(60, 472, 388, 504, "#1d4ed8")
+    box(394, 474, 420, 502, "#ffffff")
+    write("Auto-create analysis files", 72, 482, "#ffffff")
+    output_labels = [
+        "Report output (readonly)",
+        "Metrics output (readonly)",
+        "Timeline output (readonly)",
+        "Plot directory (readonly)",
+    ]
+    y = 528
+    for label in output_labels:
+        write(label, 60, y)
+        box(60, y + 18, 420, y + 52, "#eef4fb", "#cbd5e1")
+        y += 58
 
-    box(404, 108, width - 24, 300, "#ffffff")
-    write("Analysis Summary", 432, 132)
+    box(40, 698, 444, height - 40, "#f8fbff")
+    write("Settings", 60, 718)
+    write(
+        "Defaults are safe. Raise Top N for larger tables and enable debug only when needed.",
+        60,
+        744,
+        "#486581",
+    )
+    settings_labels = [
+        "Slow I/O threshold",
+        "Top N",
+        "Time scale",
+        "Timeline format",
+        "Bootlog / debug options",
+    ]
+    y = 780
+    for label in settings_labels:
+        write(label, 60, y)
+        y += 34
+
+    box(60, height - 98, 420, height - 52, "#1f6feb")
+    write("Run Analysis", 188, height - 82, "#ffffff")
+
+    box(484, 108, width - 24, 326, "#ffffff")
+    write("Analysis Summary", 512, 132)
     summary_lines = summary_text.splitlines()[:9]
     summary_y = 168
     for line in summary_lines:
-        write(line[:120], 432, summary_y, "#334e68")
+        write(line[:130], 512, summary_y, "#334e68")
         summary_y += 22
 
     trace = metrics.get("trace", {}) if isinstance(metrics.get("trace"), dict) else {}
@@ -172,19 +224,28 @@ def _render_gui_mock_image(
         ("Slow I/O", f"{io.get('slow_time_s', 'n/a')} s"),
         ("Boot", f"{boot.get('boot_duration_s', 'n/a')} s"),
     ]
-    card_x = 404
+    card_x = 484
     for title, value in cards:
-        box(card_x, 324, card_x + 234, 430, "#ffffff")
-        write(title, card_x + 24, 348, "#486581")
-        write(value, card_x + 24, 382)
-        card_x += 252
+        box(card_x, 350, card_x + 236, 454, "#ffffff")
+        write(title, card_x + 24, 372, "#486581")
+        write(value, card_x + 24, 406)
+        card_x += 248
 
-    box(404, 454, width - 24, height - 24, "#ffffff")
-    write("Metrics Preview", 432, 478)
+    box(484, 478, width - 24, 534, "#ffffff")
+    tab_labels = ["Summary", "Metrics JSON", "Baseline JSON", "Comparison", "Report HTML"]
+    tab_x = 512
+    for idx, label in enumerate(tab_labels):
+        fill = "#dbeafe" if idx == 0 else "#e5e7eb"
+        box(tab_x, 492, tab_x + 158, 520, fill)
+        write(label, tab_x + 14, 500, "#1f2937")
+        tab_x += 168
+
+    box(484, 554, width - 24, height - 24, "#ffffff")
+    write("Report HTML / Metrics Preview", 512, 578)
     metrics_text = json.dumps(metrics, indent=2).splitlines()[:18]
-    metrics_y = 516
+    metrics_y = 616
     for line in metrics_text:
-        write(line[:140], 432, metrics_y, "#243b53")
+        write(line[:145], 512, metrics_y, "#243b53")
         metrics_y += 20
 
     image.save(output_path)
@@ -236,18 +297,25 @@ def main() -> int:
     gui_body = "\n".join(
         [
             "<h2>Standalone GUI Preview</h2>",
-            "<div style='display:grid;grid-template-columns:320px 1fr;gap:24px;'>",
+            "<div style='display:grid;grid-template-columns:380px 1fr;gap:24px;'>",
             "<section>",
-            "<h3>Inputs</h3>",
+            "<h3>Trace &amp; Baseline</h3>",
+            "<p>Pick the ETL you want to inspect. Baseline inputs are optional and only used for delta comparison.</p>",
             "<table><tbody>",
             f"<tr><th>ETL trace</th><td>{html.escape(str(ROOT / 'bootLog.etl'))}</td></tr>",
+            f"<tr><th>Baseline</th><td>{html.escape(str(ROOT / 'etl_metricsBaseline.json'))}</td></tr>",
+            f"<tr><th>Baseline ETL</th><td>{html.escape(str(ROOT / 'Baseline.etl'))}</td></tr>",
+            "</tbody></table>",
+            "<h3>Output Files</h3>",
+            "<p>Auto-create analysis files is enabled. Output paths are generated from the ETL name and kept read-only.</p>",
+            "<table><tbody>",
             f"<tr><th>Report</th><td>{html.escape(str(ROOT / 'boot_report.html'))}</td></tr>",
             f"<tr><th>Metrics</th><td>{html.escape(str(ROOT / 'etl_metrics.json'))}</td></tr>",
-            f"<tr><th>Baseline</th><td>{html.escape(str(ROOT / 'etl_metricsBaseline.json'))}</td></tr>",
             f"<tr><th>Timeline</th><td>{html.escape(str(ROOT / 'boot_timeline.csv'))}</td></tr>",
+            f"<tr><th>Plot directory</th><td>{html.escape(str(ROOT / 'docs' / 'screenshots'))}</td></tr>",
             "</tbody></table>",
-            "<h3>Actions</h3>",
-            "<p>Analyze ETL, compare metrics, and review metrics with Ollama from one window.</p>",
+            "<h3>Settings</h3>",
+            "<p>Defaults stay visible with short help text so common runs do not require manual path editing.</p>",
             "</section>",
             "<section>",
             "<h3>Analysis Summary</h3>",

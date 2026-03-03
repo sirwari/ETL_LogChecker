@@ -13,6 +13,34 @@ def test_suggest_output_paths_uses_etl_stem():
     assert paths["plot_dir"] == os.path.join("/tmp", "bootLog_plots")
 
 
+def test_resolve_analysis_output_paths_auto_uses_suggested_names():
+    paths = etl_logchecker._resolve_analysis_output_paths(
+        "/tmp/bootLog.etl",
+        auto_generate=True,
+    )
+
+    assert paths["report_path"] == os.path.join("/tmp", "bootLog_report.html")
+    assert paths["metrics_output_path"] == os.path.join("/tmp", "bootLog_metrics.json")
+    assert paths["timeline_output_path"] == os.path.join("/tmp", "bootLog_timeline.json")
+    assert paths["plot_dir"] == os.path.join("/tmp", "bootLog_plots")
+
+
+def test_resolve_analysis_output_paths_manual_preserves_selected_values():
+    paths = etl_logchecker._resolve_analysis_output_paths(
+        "/tmp/bootLog.etl",
+        auto_generate=False,
+        report_path="manual_report.html",
+        metrics_output_path=None,
+        timeline_output_path="manual_timeline.json",
+        plot_dir="manual_plots",
+    )
+
+    assert paths["report_path"] == "manual_report.html"
+    assert paths["metrics_output_path"] is None
+    assert paths["timeline_output_path"] == "manual_timeline.json"
+    assert paths["plot_dir"] == "manual_plots"
+
+
 def test_build_analysis_summary_includes_artifacts_and_comparison():
     result = {
         "metrics": {
