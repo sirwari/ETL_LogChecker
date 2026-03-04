@@ -7,13 +7,15 @@ import datetime as dt
 import json
 import math
 import os
+import queue
 import subprocess
 import sys
 import tempfile
+import threading
 import xml.etree.ElementTree as ET
 import xml.sax.saxutils as saxutils
 from collections import defaultdict
-from typing import Any, Iterable, Iterator
+from typing import Any, Callable, Iterable, Iterator
 
 
 class XmlEventWriter:
@@ -3033,6 +3035,16 @@ def _format_review_diagnose(result: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _run_gui_background_task(
+    task_queue: queue.Queue[tuple[str, Any]],
+    worker: Callable[[], Any],
+) -> None:
+    try:
+        task_queue.put(("success", worker()))
+    except Exception as exc:
+        task_queue.put(("error", exc))
+
+
 def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
     try:
         import tkinter as tk
@@ -3090,6 +3102,8 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             self.review_temperature_var = tk.DoubleVar(value=0.2)
             self.review_max_tokens_var = tk.IntVar(value=800)
             self._analysis_output_controls: list[tuple[Any, Any]] = []
+            self._action_buttons: list[Any] = []
+            self._busy = False
 
             self._configure_style(tkfont)
             self._build_layout(scrolledtext, ttk)
@@ -3141,12 +3155,23 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             self._build_compare_tab(compare_tab, ttk_module)
             self._build_review_tab(review_tab, ttk_module)
 
+            footer = ttk_module.Frame(container)
+            footer.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+            footer.columnconfigure(1, weight=1)
+
+            self.progress_bar = ttk_module.Progressbar(
+                footer,
+                mode="indeterminate",
+                length=220,
+            )
+            self.progress_bar.grid(row=0, column=0, sticky="w", padx=(0, 10))
+
             status = ttk_module.Label(
-                container,
+                footer,
                 textvariable=self.status_var,
                 anchor="w",
             )
-            status.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+            status.grid(row=0, column=1, sticky="ew")
 
         def _build_path_row(
             self,
@@ -3253,6 +3278,95 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             widget.delete("1.0", tk.END)
             widget.insert("1.0", text)
             widget.configure(state="disabled")
+
+        def _register_action_button(self, button: Any) -> Any:
+            self._action_buttons.append(button)
+            return button
+
+        def _set_busy_state(
+            self,
+            busy: bool,
+            status_text: str | None = None,
+        ) -> None:
+            self._busy = busy
+            for button in self._action_buttons:
+                if busy:
+                    button.state(["disabled"])
+                else:
+                    button.state(["!disabled"])
+            if busy:
+                self.progress_bar.start(10)
+            else:
+                self.progress_bar.stop()
+            if status_text is not None:
+                self.status_var.set(status_text)
+
+        def _start_background_task(
+            self,
+            worker: Callable[[], Any],
+            on_success: Callable[[Any], None],
+            *,
+            running_text: str,
+            failure_title: str,
+            failure_status: str,
+        ) -> None:
+            if self._busy:
+                self.status_var.set("A task is already running. Wait for it to finish.")
+                return
+
+            task_queue: queue.Queue[tuple[str, Any]] = queue.Queue()
+            self._set_busy_state(True, running_text)
+
+            worker_thread = threading.Thread(
+                target=_run_gui_background_task,
+                args=(task_queue, worker),
+                daemon=True,
+            )
+            worker_thread.start()
+
+            self.root.after(
+                100,
+                lambda: self._poll_background_task(
+                    task_queue,
+                    on_success,
+                    failure_title=failure_title,
+                    failure_status=failure_status,
+                ),
+            )
+
+        def _poll_background_task(
+            self,
+            task_queue: queue.Queue[tuple[str, Any]],
+            on_success: Callable[[Any], None],
+            *,
+            failure_title: str,
+            failure_status: str,
+        ) -> None:
+            try:
+                result_type, payload = task_queue.get_nowait()
+            except queue.Empty:
+                self.root.after(
+                    100,
+                    lambda: self._poll_background_task(
+                        task_queue,
+                        on_success,
+                        failure_title=failure_title,
+                        failure_status=failure_status,
+                    ),
+                )
+                return
+
+            self._set_busy_state(False)
+            if result_type == "error":
+                self.status_var.set(failure_status)
+                messagebox.showerror(failure_title, str(payload))
+                return
+
+            try:
+                on_success(payload)
+            except Exception as exc:
+                self.status_var.set(failure_status)
+                messagebox.showerror(failure_title, str(exc))
 
         def _build_analyze_tab(
             self,
@@ -3486,11 +3600,14 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
 
             button_frame = ttk_module.Frame(controls)
             button_frame.grid(row=3, column=0, sticky="ew", pady=(12, 0))
-            ttk_module.Button(
+            button_frame.columnconfigure(0, weight=1)
+            run_button = ttk_module.Button(
                 button_frame,
                 text="Run Analysis",
                 command=self._run_analysis,
-            ).grid(row=0, column=0, sticky="ew")
+            )
+            run_button.grid(row=0, column=0, sticky="ew")
+            self._register_action_button(run_button)
 
             results = ttk_module.Notebook(parent)
             results.grid(row=0, column=1, sticky="nsew")
@@ -3566,11 +3683,13 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                 [("JSON", "*.json"), ("All files", "*.*")],
             )
 
-            ttk_module.Button(
+            compare_button = ttk_module.Button(
                 controls,
                 text="Compare Metrics",
                 command=self._run_compare_metrics,
-            ).grid(row=2, column=0, columnspan=3, sticky="w", pady=(8, 0))
+            )
+            compare_button.grid(row=2, column=0, columnspan=3, sticky="w", pady=(8, 0))
+            self._register_action_button(compare_button)
 
             output_frame = ttk_module.Frame(parent, padding=(0, 12, 0, 0))
             output_frame.grid(row=2, column=0, sticky="nsew")
@@ -3662,11 +3781,13 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                 textvariable=self.review_max_tokens_var,
             ).grid(row=1, column=3, sticky="ew")
 
-            ttk_module.Button(
+            review_button = ttk_module.Button(
                 controls,
                 text="Run Agentic Diagnose",
                 command=self._run_review,
-            ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(8, 0))
+            )
+            review_button.grid(row=4, column=0, columnspan=3, sticky="w", pady=(8, 0))
+            self._register_action_button(review_button)
 
             output_frame = ttk_module.Frame(parent, padding=(0, 12, 0, 0))
             output_frame.grid(row=2, column=0, sticky="nsew")
@@ -3744,58 +3865,13 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                 self.compare_baseline_var.set(baseline_source)
                 self.review_baseline_var.set(baseline_source)
 
-        def _run_analysis(self) -> None:
-            etl_path = self.analyze_etl_var.get().strip()
-            if not etl_path:
-                messagebox.showerror("Missing ETL", "Choose an ETL trace first.")
-                return
-
-            self.status_var.set("Running ETL analysis...")
-            self.root.update_idletasks()
-
-            compare_source = (
-                self.compare_metrics_var.get().strip()
-                or self.compare_etl_var.get().strip()
-            )
-            outputs = _resolve_analysis_output_paths(
-                etl_path=etl_path,
-                auto_generate=bool(self.auto_output_files_var.get()),
-                report_path=self.report_path_var.get().strip() or None,
-                metrics_output_path=self.metrics_output_var.get().strip() or None,
-                timeline_output_path=self.timeline_output_var.get().strip() or None,
-                plot_dir=self.plot_dir_var.get().strip() or None,
-            )
-
-            try:
-                result = run_analysis_job(
-                    etl_path=etl_path,
-                    report_path=outputs["report_path"],
-                    metrics_output_path=outputs["metrics_output_path"],
-                    compare_metrics_path=self.compare_metrics_var.get().strip() or None,
-                    compare_etl_path=self.compare_etl_var.get().strip() or None,
-                    timeline_output_path=outputs["timeline_output_path"],
-                    timeline_format=self.timeline_format_var.get().strip() or "json",
-                    plot_dir=outputs["plot_dir"],
-                    plot_bin_s=float(self.plot_bin_s_var.get()),
-                    slow_io_ms=int(self.slow_io_ms_var.get()),
-                    top_n=int(self.top_n_var.get()),
-                    time_scale=self.time_scale_var.get().strip() or "auto",
-                    bootlog=bool(self.bootlog_var.get()),
-                    boot_window_s=float(self.boot_window_s_var.get()),
-                    debug=bool(self.debug_var.get()),
-                    progress_every=200000 if self.debug_var.get() else 0,
-                    tracerpt_exe=self.tracerpt_exe_var.get().strip() or None,
-                    use_tracerpt=bool(self.use_tracerpt_var.get()),
-                    use_etl_observer=bool(self.use_etl_observer_var.get()),
-                    force_etl_observer=bool(self.force_etl_observer_var.get()),
-                    return_metrics=True,
-                    return_baseline_metrics=True,
-                )
-            except Exception as exc:
-                self.status_var.set("Analysis failed.")
-                messagebox.showerror("Analysis failed", str(exc))
-                return
-
+        def _apply_analysis_result(
+            self,
+            result: dict[str, Any],
+            *,
+            etl_path: str,
+            compare_source: str | None,
+        ) -> None:
             baseline_data = result.get("baseline_metrics")
             if baseline_data is None and self.compare_metrics_var.get().strip():
                 try:
@@ -3813,7 +3889,7 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                 _build_analysis_summary(
                     result,
                     etl_path=etl_path,
-                    compare_source=compare_source or None,
+                    compare_source=compare_source,
                 ),
             )
             self._set_text(
@@ -3828,7 +3904,9 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                 self.analysis_comparison_text,
                 _format_json_block(result.get("comparison", {})),
             )
-            report_text = result.get("report_html") or _read_text_file(result.get("report_path"))
+            report_text = result.get("report_html") or _read_text_file(
+                result.get("report_path")
+            )
             self._set_text(
                 self.analysis_report_text,
                 _format_html_block(report_text) or "No HTML report was generated.",
@@ -3844,6 +3922,91 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
 
             self.status_var.set("Analysis complete.")
 
+        def _apply_compare_metrics_result(self, result: dict[str, Any]) -> None:
+            self._set_text(self.compare_output_text, _format_json_block(result))
+            self.status_var.set("Metrics comparison complete.")
+
+        def _apply_review_result(self, result: dict[str, Any]) -> None:
+            self._set_text(self.review_output_text, _format_review_diagnose(result))
+            if result.get("heuristic_fallback"):
+                self.status_var.set("Agentic diagnose complete (heuristic fallback).")
+            else:
+                self.status_var.set("Agentic diagnose complete (Ollama connected).")
+
+        def _run_analysis(self) -> None:
+            etl_path = self.analyze_etl_var.get().strip()
+            if not etl_path:
+                messagebox.showerror("Missing ETL", "Choose an ETL trace first.")
+                return
+
+            try:
+                compare_metrics_path = self.compare_metrics_var.get().strip() or None
+                compare_etl_path = self.compare_etl_var.get().strip() or None
+                compare_source = compare_metrics_path or compare_etl_path
+                outputs = _resolve_analysis_output_paths(
+                    etl_path=etl_path,
+                    auto_generate=bool(self.auto_output_files_var.get()),
+                    report_path=self.report_path_var.get().strip() or None,
+                    metrics_output_path=self.metrics_output_var.get().strip() or None,
+                    timeline_output_path=self.timeline_output_var.get().strip() or None,
+                    plot_dir=self.plot_dir_var.get().strip() or None,
+                )
+                timeline_format = self.timeline_format_var.get().strip() or "json"
+                plot_bin_s = float(self.plot_bin_s_var.get())
+                slow_io_ms = int(self.slow_io_ms_var.get())
+                top_n = int(self.top_n_var.get())
+                time_scale = self.time_scale_var.get().strip() or "auto"
+                bootlog = bool(self.bootlog_var.get())
+                boot_window_s = float(self.boot_window_s_var.get())
+                debug = bool(self.debug_var.get())
+                progress_every = 200000 if debug else 0
+                tracerpt_exe = self.tracerpt_exe_var.get().strip() or None
+                use_tracerpt = bool(self.use_tracerpt_var.get())
+                use_etl_observer = bool(self.use_etl_observer_var.get())
+                force_etl_observer = bool(self.force_etl_observer_var.get())
+            except Exception as exc:
+                self.status_var.set("Analysis failed.")
+                messagebox.showerror("Analysis failed", str(exc))
+                return
+
+            def _worker() -> dict[str, Any]:
+                return run_analysis_job(
+                    etl_path=etl_path,
+                    report_path=outputs["report_path"],
+                    metrics_output_path=outputs["metrics_output_path"],
+                    compare_metrics_path=compare_metrics_path,
+                    compare_etl_path=compare_etl_path,
+                    timeline_output_path=outputs["timeline_output_path"],
+                    timeline_format=timeline_format,
+                    plot_dir=outputs["plot_dir"],
+                    plot_bin_s=plot_bin_s,
+                    slow_io_ms=slow_io_ms,
+                    top_n=top_n,
+                    time_scale=time_scale,
+                    bootlog=bootlog,
+                    boot_window_s=boot_window_s,
+                    debug=debug,
+                    progress_every=progress_every,
+                    tracerpt_exe=tracerpt_exe,
+                    use_tracerpt=use_tracerpt,
+                    use_etl_observer=use_etl_observer,
+                    force_etl_observer=force_etl_observer,
+                    return_metrics=True,
+                    return_baseline_metrics=True,
+                )
+
+            self._start_background_task(
+                _worker,
+                lambda result: self._apply_analysis_result(
+                    result,
+                    etl_path=etl_path,
+                    compare_source=compare_source or None,
+                ),
+                running_text="Running ETL analysis... The progress bar shows the UI is still active.",
+                failure_title="Analysis failed",
+                failure_status="Analysis failed.",
+            )
+
         def _run_compare_metrics(self) -> None:
             current_path = self.compare_current_var.get().strip()
             baseline_path = self.compare_baseline_var.get().strip()
@@ -3854,20 +4017,18 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                 )
                 return
 
-            self.status_var.set("Comparing metrics...")
-            self.root.update_idletasks()
-
-            try:
+            def _worker() -> dict[str, Any]:
                 from etl_agent import compare_and_score
 
-                result = compare_and_score(current_path, baseline_path)
-            except Exception as exc:
-                self.status_var.set("Metrics comparison failed.")
-                messagebox.showerror("Metrics comparison failed", str(exc))
-                return
+                return compare_and_score(current_path, baseline_path)
 
-            self._set_text(self.compare_output_text, _format_json_block(result))
-            self.status_var.set("Metrics comparison complete.")
+            self._start_background_task(
+                _worker,
+                self._apply_compare_metrics_result,
+                running_text="Comparing metrics... The progress bar shows the UI is still active.",
+                failure_title="Metrics comparison failed",
+                failure_status="Metrics comparison failed.",
+            )
 
         def _run_review(self) -> None:
             current_path = self.review_current_var.get().strip()
@@ -3879,32 +4040,38 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                 )
                 return
 
-            self.status_var.set("Running agentic diagnose...")
-            self.root.update_idletasks()
-
             try:
-                from etl_agent import review_with_llm
-
-                result = review_with_llm(
-                    current=current_path,
-                    baseline=baseline_path,
-                    ollama_host=self.review_host_var.get().strip() or None,
-                    model=self.review_model_var.get().strip() or None,
-                    temperature=float(self.review_temperature_var.get()),
-                    max_tokens=int(self.review_max_tokens_var.get()),
-                    focus=self.review_focus_var.get().strip() or None,
-                    return_raw=False,
-                )
+                ollama_host = self.review_host_var.get().strip() or None
+                model = self.review_model_var.get().strip() or None
+                temperature = float(self.review_temperature_var.get())
+                max_tokens = int(self.review_max_tokens_var.get())
+                focus = self.review_focus_var.get().strip() or None
             except Exception as exc:
                 self.status_var.set("Agentic diagnose failed.")
                 messagebox.showerror("Agentic diagnose failed", str(exc))
                 return
 
-            self._set_text(self.review_output_text, _format_review_diagnose(result))
-            if result.get("heuristic_fallback"):
-                self.status_var.set("Agentic diagnose complete (heuristic fallback).")
-            else:
-                self.status_var.set("Agentic diagnose complete (Ollama connected).")
+            def _worker() -> dict[str, Any]:
+                from etl_agent import review_with_llm
+
+                return review_with_llm(
+                    current=current_path,
+                    baseline=baseline_path,
+                    ollama_host=ollama_host,
+                    model=model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    focus=focus,
+                    return_raw=False,
+                )
+
+            self._start_background_task(
+                _worker,
+                self._apply_review_result,
+                running_text="Running agentic diagnose... The progress bar shows the UI is still active.",
+                failure_title="Agentic diagnose failed",
+                failure_status="Agentic diagnose failed.",
+            )
 
     app = _StandaloneGUI()
     app.root.mainloop()
