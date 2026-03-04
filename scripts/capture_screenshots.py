@@ -131,7 +131,7 @@ def _render_gui_mock_image(
     output_path: Path,
 ) -> None:
     width = 1520
-    height = 980
+    height = 1040
     image = Image.new("RGB", (width, height), "#e7edf5")
     draw = ImageDraw.Draw(image)
     font = ImageFont.load_default()
@@ -186,7 +186,7 @@ def _render_gui_mock_image(
         "#d9e2ec",
     )
 
-    box(24, 108, 460, height - 24, "#d7e0eb")
+    box(24, 108, 460, height - 96, "#d7e0eb")
 
     box(40, 126, 444, 370, "#f8fbff")
     write("Trace & Baseline", 60, 146)
@@ -234,7 +234,7 @@ def _render_gui_mock_image(
         box(60, y + 18, 420, y + 52, "#eef4fb", "#cbd5e1")
         y += 58
 
-    box(40, 698, 444, height - 40, "#f8fbff")
+    box(40, 698, 444, height - 112, "#f8fbff")
     write("Settings", 60, 718)
     write_wrapped(
         "Defaults are safe. Raise Top N for larger tables and enable debug only when needed.",
@@ -256,8 +256,8 @@ def _render_gui_mock_image(
         write(label, 60, y)
         y += 34
 
-    box(60, height - 98, 420, height - 52, "#1f6feb")
-    write("Run Analysis", 188, height - 82, "#ffffff")
+    box(60, height - 170, 420, height - 124, "#1f6feb")
+    write("Run Analysis", 188, height - 154, "#ffffff")
 
     box(484, 108, width - 24, 326, "#ffffff")
     write("Analysis Summary", 512, 132)
@@ -297,7 +297,7 @@ def _render_gui_mock_image(
         write(label, tab_x + 14, 500, "#1f2937")
         tab_x += 168
 
-    box(484, 554, width - 24, height - 24, "#ffffff")
+    box(484, 554, width - 24, height - 96, "#ffffff")
     write("Report HTML / Metrics Preview", 512, 578)
     metrics_preview = textwrap.shorten(
         json.dumps(metrics, indent=2).replace("\n", " "),
@@ -309,6 +309,11 @@ def _render_gui_mock_image(
     for line in metrics_text:
         write(line, 512, metrics_y, "#243b53")
         metrics_y += 20
+
+    box(24, height - 72, width - 24, height - 24, "#ffffff")
+    box(48, height - 56, 316, height - 40, "#bfdbfe")
+    box(48, height - 56, 228, height - 40, "#2563eb")
+    write("Running ETL analysis... The progress bar shows the UI is still active.", 340, height - 58)
 
     image.save(output_path)
 

@@ -1,4 +1,5 @@
 import os
+import queue
 import sys
 
 import etl_logchecker
@@ -98,3 +99,32 @@ def test_main_routes_gui_mode(monkeypatch):
 
     assert etl_logchecker.main() == 17
     assert called["path"] == "bootLog.etl"
+
+
+def test_run_gui_background_task_reports_success():
+    task_queue: queue.Queue[tuple[str, object]] = queue.Queue()
+
+    etl_logchecker._run_gui_background_task(
+        task_queue,
+        lambda: {"ok": True, "count": 1},
+    )
+
+    result_type, payload = task_queue.get_nowait()
+
+    assert result_type == "success"
+    assert payload == {"ok": True, "count": 1}
+
+
+def test_run_gui_background_task_reports_errors():
+    task_queue: queue.Queue[tuple[str, object]] = queue.Queue()
+
+    def _raise_error():
+        raise RuntimeError("worker failed")
+
+    etl_logchecker._run_gui_background_task(task_queue, _raise_error)
+
+    result_type, payload = task_queue.get_nowait()
+
+    assert result_type == "error"
+    assert isinstance(payload, RuntimeError)
+    assert str(payload) == "worker failed"
