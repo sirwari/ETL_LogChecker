@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import xml.etree.ElementTree as ET
 import xml.sax.saxutils as saxutils
 from collections import defaultdict
@@ -345,7 +346,7 @@ def render_gui_quickstart_text() -> str:
             "   macOS/Linux: ./start.sh",
             "   Windows PowerShell: .\\start.ps1",
             "3. In the GUI, choose an ETL trace and leave Auto-create output files enabled.",
-            "4. Click Run Analysis to generate the report, metrics JSON, timeline, and plots.",
+            "4. Click Run Analysis to generate report, metrics JSON, timeline, and plots in a timestamped output folder.",
             "5. Use Compare Metrics for saved JSON comparisons and Agentic Diagnose for Ollama-backed review.",
             "Optional: run `python etl_logchecker.py --gui` directly if you do not want to use the helper scripts.",
         ]
@@ -367,6 +368,7 @@ class ETLAnalyzer:
     KERNEL_NETWORK_NAME = "Microsoft-Windows-Kernel-Network"
     OBSERVER_MAX_BYTES = 512 * 1024 * 1024
     PROGRESS_EVERY = 100_000
+    TRACERPT_TIMEOUT_S = 30.0
 
     def __init__(
         self,
@@ -400,6 +402,7 @@ class ETLAnalyzer:
         self._timestamp_scale: float | None = timestamp_scale
         self._last_timestamp: float | None = None
         self._network_bin_s: float | None = None
+        self._tracerpt_unavailable = False
         self._network_bins: dict[int, dict[str, int]] = defaultdict(
             lambda: {"sent": 0, "recv": 0}
         )
@@ -673,6 +676,8 @@ class ETLAnalyzer:
     def _iter_events_tracerpt(self) -> Iterator[dict[str, Any]]:
         if not self.use_tracerpt:
             return iter(())
+        if self._tracerpt_unavailable:
+            return iter(())
 
         with tempfile.TemporaryDirectory(prefix="etl_tracerpt_") as temp_dir:
             csv_path = os.path.join(temp_dir, "trace.csv")
@@ -686,9 +691,12 @@ class ETLAnalyzer:
                 yield from self._iter_tracerpt_xml(xml_path)
                 return
 
-        raise RuntimeError("tracerpt.exe failed to produce CSV or XML output.")
+        self._log("tracerpt.exe did not produce usable CSV or XML output; skipping.")
+        return
 
     def _run_tracerpt(self, fmt: str, output_path: str) -> bool:
+        if self._tracerpt_unavailable:
+            return False
         cmd = [
             self.tracerpt_exe,
             self.etl_path,
@@ -706,11 +714,22 @@ class ETLAnalyzer:
                 stderr=subprocess.PIPE,
                 text=True,
                 check=False,
+                timeout=self.TRACERPT_TIMEOUT_S,
             )
         except FileNotFoundError as exc:
-            raise RuntimeError(
-                "tracerpt.exe not found on PATH. Set --tracerpt-exe to a full path."
-            ) from exc
+            self._tracerpt_unavailable = True
+            self._log(
+                "tracerpt.exe not found on PATH; skipping tracerpt fallback. "
+                "Set --tracerpt-exe to a full path if you want it enabled."
+            )
+            return False
+        except subprocess.TimeoutExpired:
+            self._tracerpt_unavailable = True
+            self._log(
+                f"tracerpt timed out after {self.TRACERPT_TIMEOUT_S:.0f}s; "
+                "skipping tracerpt fallback."
+            )
+            return False
         if result.returncode != 0:
             self._log(f"tracerpt failed: {result.stderr.strip()}")
             return False
@@ -1752,6 +1771,9 @@ class ETLUXAnalyzer:
                 "events_per_s": _safe_div(float(self.event_count), trace_duration)
                 if trace_duration > 0
                 else None,
+                "events_per_process": _safe_div(float(self.event_count), float(process_count))
+                if process_count > 0
+                else None,
                 "process_count": process_count,
                 "user_process_count": user_process_count,
             },
@@ -1768,6 +1790,11 @@ class ETLUXAnalyzer:
                 )
                 if self.total_io_ops > 0
                 else 0.0,
+                "throughput_bytes_per_s": _safe_div(
+                    float(self.total_io_bytes), trace_duration
+                )
+                if trace_duration > 0
+                else None,
                 "slow_ops": self.slow_io_ops,
                 "slow_ops_pct": _safe_div(float(self.slow_io_ops), float(self.total_io_ops))
                 if self.total_io_ops > 0
@@ -1827,6 +1854,9 @@ def _write_timeline_output(
     output_path: str,
     fmt: str,
 ) -> None:
+    directory = os.path.dirname(output_path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
     if fmt == "json":
         with open(output_path, "w", encoding="utf-8") as handle:
             json.dump(rows, handle, indent=2)
@@ -1881,6 +1911,7 @@ def _write_network_throughput_plot(
     trends: list[dict[str, float]],
     plot_dir: str,
 ) -> str | None:
+    os.makedirs(plot_dir, exist_ok=True)
     if not trends:
         return None
     try:
@@ -1892,7 +1923,6 @@ def _write_network_throughput_plot(
         )
         return None
 
-    os.makedirs(plot_dir, exist_ok=True)
     times = [row["time_s"] for row in trends]
     sent = [row["sent_bytes"] for row in trends]
     recv = [row["recv_bytes"] for row in trends]
@@ -2234,10 +2264,13 @@ def _render_report(
     slow_pct = io.get("slow_time_pct", 0.0) * 100.0
     slow_ops_pct = float(io.get("slow_ops_pct", 0.0) or 0.0) * 100.0
     duration_s = trace.get("duration_s", 0.0) or 0.0
+    event_count = trace.get("event_count")
     events_per_s = trace.get("events_per_s")
+    events_per_process = trace.get("events_per_process")
     process_count = trace.get("process_count")
     user_process_count = trace.get("user_process_count")
     avg_bytes_per_op = io.get("avg_bytes_per_op")
+    io_throughput = io.get("throughput_bytes_per_s")
     launch_p95 = launch_stats.get("p95_s")
     launch_avg = launch_stats.get("avg_s")
     boot_order_count = boot.get("boot_order_count")
@@ -2590,13 +2623,17 @@ def _render_report(
 
     <div class="cards">
       <div class="card"><h3>Trace duration</h3><div class="value">{_format_seconds(duration_s)}</div></div>
+      <div class="card"><h3>Event count</h3><div class="value">{int(event_count) if event_count is not None else "n/a"}</div></div>
       <div class="card"><h3>Events / s</h3><div class="value">{f"{events_per_s:.2f}" if events_per_s is not None else "n/a"}</div></div>
+      <div class="card"><h3>Events / process</h3><div class="value">{f"{float(events_per_process):.2f}" if events_per_process is not None else "n/a"}</div></div>
       <div class="card"><h3>Processes</h3><div class="value">{int(process_count) if process_count is not None else "n/a"}</div></div>
       <div class="card"><h3>User processes</h3><div class="value">{int(user_process_count) if user_process_count is not None else "n/a"}</div></div>
       <div class="card"><h3>Slow I/O time</h3><div class="value">{_format_seconds(io.get("slow_time_s"))}</div></div>
       <div class="card"><h3>Slow I/O %</h3><div class="value">{slow_pct:.2f}%</div></div>
       <div class="card"><h3>Slow ops %</h3><div class="value">{slow_ops_pct:.2f}%</div></div>
       <div class="card"><h3>I/O p95</h3><div class="value">{_format_seconds(io_percentiles.get("p95_s"))}</div></div>
+      <div class="card"><h3>I/O p99</h3><div class="value">{_format_seconds(io_percentiles.get("p99_s"))}</div></div>
+      <div class="card"><h3>I/O throughput</h3><div class="value">{_format_bytes(io_throughput) + "/s" if io_throughput is not None else "n/a"}</div></div>
       <div class="card"><h3>Launch p95</h3><div class="value">{_format_seconds(launch_p95)}</div></div>
     </div>
 
@@ -2620,6 +2657,7 @@ def _render_report(
         <span><strong>Tracked processes:</strong> {int(process_count) if process_count is not None else "n/a"}</span>
         <span><strong>User processes:</strong> {int(user_process_count) if user_process_count is not None else "n/a"}</span>
         <span><strong>Avg I/O bytes / op:</strong> {_format_bytes(avg_bytes_per_op)}</span>
+        <span><strong>I/O throughput:</strong> {_format_bytes(io_throughput) + "/s" if io_throughput is not None else "n/a"}</span>
       </div>
       {_render_bar_chart(launch_top, "startup_latency_s", "image", "s")}
       {_render_table(["Image", "PID", "Session", "Latency", "First signal"], launch_rows)}
@@ -2664,6 +2702,9 @@ def _render_report(
 
 
 def _write_json_file(path: str, data: Any) -> None:
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
     with open(path, "w", encoding="utf-8") as handle:
         json.dump(data, handle, indent=2)
 
@@ -2701,7 +2742,25 @@ def run_analysis_job(
     force_etl_observer: bool = False,
     return_metrics: bool = True,
     return_baseline_metrics: bool = False,
+    progress_callback: Callable[[str], None] | None = None,
+    progress_event_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
+    def _report_progress(status_text: str) -> None:
+        if progress_callback:
+            progress_callback(status_text)
+
+    def _publish_progress(
+        status_text: str,
+        updates: dict[str, Any] | None = None,
+    ) -> None:
+        if progress_event_callback:
+            progress_event_callback(
+                {
+                    "status_text": status_text,
+                    "updates": updates or {},
+                }
+            )
+
     if compare_metrics_path and compare_etl_path:
         raise ValueError("Provide either compare_metrics_path or compare_etl_path, not both.")
     if not os.path.isfile(etl_path):
@@ -2721,6 +2780,18 @@ def run_analysis_job(
 
     timestamp_scale, time_scale_source = _resolve_time_scale(etl_path, time_scale)
 
+    metrics: dict[str, Any] = {}
+    baseline_metrics = None
+    baseline_metrics_path = None
+    comparison = None
+    timeline_rows = None
+    timeline_path = None
+    warnings: list[str] = []
+    plot_paths: dict[str, str] = {}
+    report_html = None
+    written_metrics_path = None
+    written_report_path = None
+
     ux = ETLUXAnalyzer(
         etl_path,
         slow_io_ms=slow_io_ms,
@@ -2732,17 +2803,36 @@ def run_analysis_job(
         bootlog=bootlog,
         boot_window_s=boot_window_s,
     )
+    _report_progress("Analyzing primary ETL trace...")
+    _publish_progress("Analyzing primary ETL trace...")
     metrics = ux.analyze()
+    _report_progress("Primary ETL analysis complete.")
+    _publish_progress("Primary ETL analysis complete.", {"metrics": metrics})
 
     if metrics_output_path:
+        _report_progress("Writing primary metrics JSON...")
         _write_json_file(metrics_output_path, metrics)
+        written_metrics_path = metrics_output_path
+        _publish_progress(
+            "Writing primary metrics JSON...",
+            {"metrics_path": written_metrics_path},
+        )
 
-    baseline_metrics = None
-    baseline_metrics_path = None
     if compare_metrics_path:
+        _report_progress("Loading baseline metrics JSON...")
         with open(compare_metrics_path, "r", encoding="utf-8") as handle:
             baseline_metrics = json.load(handle)
+        comparison = _compare_metrics(metrics, baseline_metrics)
+        _publish_progress(
+            "Loading baseline metrics JSON...",
+            {
+                "baseline_metrics": baseline_metrics,
+                "comparison": comparison,
+            },
+        )
     elif compare_etl_path:
+        _report_progress("Analyzing baseline ETL trace...")
+        _publish_progress("Analyzing baseline ETL trace...")
         baseline_ux = ETLUXAnalyzer(
             compare_etl_path,
             slow_io_ms=slow_io_ms,
@@ -2755,17 +2845,28 @@ def run_analysis_job(
             boot_window_s=boot_window_s,
         )
         baseline_metrics = baseline_ux.analyze()
+        comparison = _compare_metrics(metrics, baseline_metrics)
+        _report_progress("Baseline ETL analysis complete.")
+        _publish_progress(
+            "Baseline ETL analysis complete.",
+            {
+                "baseline_metrics": baseline_metrics,
+                "comparison": comparison,
+            },
+        )
         if metrics_output_path or report_path:
+            _report_progress("Writing baseline metrics JSON...")
             baseline_metrics_path = _derive_baseline_metrics_path(
                 metrics_output_path, report_path
             )
             _write_json_file(baseline_metrics_path, baseline_metrics)
+            _publish_progress(
+                "Writing baseline metrics JSON...",
+                {"baseline_metrics_path": baseline_metrics_path},
+            )
 
-    comparison = _compare_metrics(metrics, baseline_metrics) if baseline_metrics else None
-
-    timeline_rows = None
-    timeline_path = None
     if timeline_output_path:
+        _report_progress("Writing timeline output...")
         trace_duration = metrics.get("trace", {}).get("duration_s") or 0.0
         timeline_rows = _build_timeline_rows(
             ux.pid_start_ts,
@@ -2777,43 +2878,92 @@ def run_analysis_job(
         )
         _write_timeline_output(timeline_rows, timeline_output_path, timeline_format)
         timeline_path = timeline_output_path
-
-    warnings: list[str] = []
-    plot_paths: dict[str, str] = {}
-    if plot_dir:
-        trends = _collect_network_trends(
-            etl_path,
-            plot_bin_s,
-            timestamp_scale,
-            debug,
-            tracerpt_exe,
-            use_tracerpt,
-            use_etl_observer,
-            force_etl_observer,
+        _publish_progress(
+            "Writing timeline output...",
+            {"timeline_path": timeline_path},
         )
-        plot_path = _write_network_throughput_plot(trends, plot_dir)
-        if plot_path:
-            if report_path:
-                report_dir = os.path.dirname(report_path) or "."
-                plot_paths["network_throughput"] = os.path.relpath(
-                    plot_path, report_dir
-                )
-            else:
-                plot_paths["network_throughput"] = plot_path
-        else:
-            warnings.append("Plot generation skipped (missing matplotlib or no data).")
 
-    report_html = None
+    if plot_dir:
+        os.makedirs(plot_dir, exist_ok=True)
+        trends: list[dict[str, float]] | None = None
+        _report_progress("Collecting network trends for plots...")
+        _publish_progress("Collecting network trends for plots...")
+        try:
+            trends = _collect_network_trends(
+                etl_path,
+                plot_bin_s,
+                timestamp_scale,
+                debug,
+                tracerpt_exe,
+                use_tracerpt,
+                use_etl_observer,
+                force_etl_observer,
+            )
+        except Exception as exc:
+            warnings.append(
+                f"Plot generation skipped (network trend collection failed: {exc})."
+            )
+            _publish_progress(
+                "Collecting network trends for plots...",
+                {"warnings": warnings},
+            )
+
+        if trends is not None:
+            _report_progress("Rendering network throughput plot...")
+            _publish_progress("Rendering network throughput plot...")
+            render_failed = False
+            try:
+                plot_path = _write_network_throughput_plot(trends, plot_dir)
+            except Exception as exc:
+                render_failed = True
+                warnings.append(f"Plot generation skipped ({exc}).")
+                _publish_progress(
+                    "Rendering network throughput plot...",
+                    {"warnings": warnings},
+                )
+                plot_path = None
+            if plot_path:
+                if report_path:
+                    report_dir = os.path.dirname(report_path) or "."
+                    plot_paths["network_throughput"] = os.path.relpath(
+                        plot_path, report_dir
+                    )
+                else:
+                    plot_paths["network_throughput"] = plot_path
+                _publish_progress(
+                    "Rendering network throughput plot...",
+                    {"plot_paths": plot_paths},
+                )
+            elif not render_failed:
+                warnings.append("Plot generation skipped (missing matplotlib or no data).")
+                _publish_progress(
+                    "Rendering network throughput plot...",
+                    {"warnings": warnings},
+                )
+
     if report_path:
+        _report_progress("Rendering HTML report...")
+        _publish_progress("Rendering HTML report...")
         report_html = _render_report(metrics, baseline_metrics, plot_paths)
+        report_dir = os.path.dirname(report_path)
+        if report_dir:
+            os.makedirs(report_dir, exist_ok=True)
         with open(report_path, "w", encoding="utf-8") as handle:
             handle.write(report_html)
+        written_report_path = report_path
+        _publish_progress(
+            "Rendering HTML report...",
+            {
+                "report_html": report_html,
+                "report_path": written_report_path,
+            },
+        )
 
     response: dict[str, Any] = {
         "comparison": comparison,
-        "metrics_path": metrics_output_path,
+        "metrics_path": written_metrics_path,
         "baseline_metrics_path": baseline_metrics_path,
-        "report_path": report_path,
+        "report_path": written_report_path,
         "report_html": report_html,
         "timeline_path": timeline_path,
         "timeline_rows": timeline_rows,
@@ -2826,6 +2976,8 @@ def run_analysis_job(
     if return_baseline_metrics:
         response["baseline_metrics"] = baseline_metrics
 
+    _report_progress("Finalizing results...")
+    _publish_progress("Finalizing results...")
     return response
 
 
@@ -2840,11 +2992,13 @@ def _suggest_output_paths(etl_path: str | None) -> dict[str, str]:
     normalized = os.path.abspath(etl_path)
     directory = os.path.dirname(normalized) or "."
     stem = os.path.splitext(os.path.basename(normalized))[0] or "etl_trace"
+    run_stamp = dt.datetime.now().strftime("%Y%m%d_%H%M")
+    result_dir = os.path.join(directory, f"{stem}_{run_stamp}")
     return {
-        "report_path": os.path.join(directory, f"{stem}_report.html"),
-        "metrics_output_path": os.path.join(directory, f"{stem}_metrics.json"),
-        "timeline_output_path": os.path.join(directory, f"{stem}_timeline.json"),
-        "plot_dir": os.path.join(directory, f"{stem}_plots"),
+        "report_path": os.path.join(result_dir, f"{stem}_report.html"),
+        "metrics_output_path": os.path.join(result_dir, f"{stem}_metrics.json"),
+        "timeline_output_path": os.path.join(result_dir, f"{stem}_timeline.json"),
+        "plot_dir": os.path.join(result_dir, f"{stem}_plots"),
     }
 
 
@@ -2865,6 +3019,23 @@ def _format_html_block(text: str | None) -> str:
     if not text:
         return ""
     return text.replace("><", ">\n<")
+
+
+def _merge_analysis_progress_result(
+    current: dict[str, Any] | None,
+    updates: dict[str, Any] | None,
+) -> dict[str, Any]:
+    merged = dict(current or {})
+    if not updates:
+        return merged
+    for key, value in updates.items():
+        if key == "plot_paths":
+            merged[key] = dict(value or {})
+        elif key == "warnings":
+            merged[key] = list(value or [])
+        else:
+            merged[key] = value
+    return merged
 
 
 def _resolve_analysis_output_paths(
@@ -2895,6 +3066,8 @@ def _build_analysis_summary(
     result: dict[str, Any],
     etl_path: str | None = None,
     compare_source: str | None = None,
+    status_text: str | None = None,
+    in_progress: bool = False,
 ) -> str:
     metrics = result.get("metrics", {}) or {}
     trace = metrics.get("trace", {}) or {}
@@ -2904,7 +3077,13 @@ def _build_analysis_summary(
     launch = metrics.get("launch_latency", {}) or {}
     launch_stats = launch.get("stats", {}) or {}
 
-    lines = [
+    lines: list[str] = []
+    if status_text:
+        lines.append(f"Stage: {status_text}")
+        lines.append(f"Run state: {'In progress' if in_progress else 'Complete'}")
+        lines.append("")
+
+    lines.extend([
         f"ETL file: {etl_path or metrics.get('metadata', {}).get('etl_path') or 'n/a'}",
         f"Events: {trace.get('event_count', 'n/a')}",
         f"Trace duration: {_format_seconds(trace.get('duration_s'))}",
@@ -2912,6 +3091,12 @@ def _build_analysis_summary(
         + (
             f"{float(trace.get('events_per_s')):.2f}"
             if trace.get("events_per_s") is not None
+            else "n/a"
+        ),
+        "Events / process: "
+        + (
+            f"{float(trace.get('events_per_process')):.2f}"
+            if trace.get("events_per_process") is not None
             else "n/a"
         ),
         "Processes: "
@@ -2923,6 +3108,12 @@ def _build_analysis_summary(
             else "n/a"
         ),
         f"Slow I/O time: {_format_seconds(io.get('slow_time_s'))}",
+        "I/O throughput: "
+        + (
+            f"{_format_bytes(float(io.get('throughput_bytes_per_s')))} / s"
+            if io.get("throughput_bytes_per_s") is not None
+            else "n/a"
+        ),
         f"Slow I/O %: {(float(io.get('slow_time_pct', 0.0) or 0.0) * 100.0):.2f}%",
         f"Slow ops %: {(float(io.get('slow_ops_pct', 0.0) or 0.0) * 100.0):.2f}%",
         f"I/O p95: {_format_seconds(io_percentiles.get('p95_s'))}",
@@ -2930,7 +3121,7 @@ def _build_analysis_summary(
         f"Launch p95: {_format_seconds(launch_stats.get('p95_s'))}",
         f"Boot duration: {_format_seconds(boot.get('boot_duration_s'))}",
         f"Boot order entries: {int(boot.get('boot_order_count', 0) or 0)}",
-    ]
+    ])
 
     if compare_source:
         lines.append(f"Baseline source: {compare_source}")
@@ -3104,6 +3295,10 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             self._analysis_output_controls: list[tuple[Any, Any]] = []
             self._action_buttons: list[Any] = []
             self._busy = False
+            self._busy_started_at: float | None = None
+            self._busy_status_text = ""
+            self._analysis_live_result: dict[str, Any] = {}
+            self._analysis_context: dict[str, Any] = {}
 
             self._configure_style(tkfont)
             self._build_layout(scrolledtext, ttk)
@@ -3295,20 +3490,49 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                 else:
                     button.state(["!disabled"])
             if busy:
+                self._busy_started_at = time.monotonic()
+                self._busy_status_text = status_text or "Working..."
                 self.progress_bar.start(10)
             else:
+                self._busy_started_at = None
+                self._busy_status_text = ""
                 self.progress_bar.stop()
             if status_text is not None:
-                self.status_var.set(status_text)
+                if busy:
+                    self._refresh_busy_status(status_text)
+                else:
+                    self.status_var.set(status_text)
+
+        def _format_elapsed(self) -> str:
+            if self._busy_started_at is None:
+                return "0s"
+            elapsed_s = max(0, int(time.monotonic() - self._busy_started_at))
+            hours, remainder = divmod(elapsed_s, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            if hours:
+                return f"{hours}h {minutes:02d}m {seconds:02d}s"
+            if minutes:
+                return f"{minutes}m {seconds:02d}s"
+            return f"{seconds}s"
+
+        def _refresh_busy_status(self, status_text: str | None = None) -> None:
+            if status_text is not None:
+                self._busy_status_text = status_text
+            base = self._busy_status_text or "Working..."
+            if not self._busy:
+                self.status_var.set(base)
+                return
+            self.status_var.set(f"{base} (elapsed {self._format_elapsed()})")
 
         def _start_background_task(
             self,
-            worker: Callable[[], Any],
+            worker: Callable[[Callable[[str], None], Callable[[str, Any], None]], Any],
             on_success: Callable[[Any], None],
             *,
             running_text: str,
             failure_title: str,
             failure_status: str,
+            event_handlers: dict[str, Callable[[Any], None]] | None = None,
         ) -> None:
             if self._busy:
                 self.status_var.set("A task is already running. Wait for it to finish.")
@@ -3317,20 +3541,27 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             task_queue: queue.Queue[tuple[str, Any]] = queue.Queue()
             self._set_busy_state(True, running_text)
 
+            def _report_progress(status_text: str) -> None:
+                task_queue.put(("progress", status_text))
+
+            def _report_event(event_name: str, payload: Any) -> None:
+                task_queue.put((event_name, payload))
+
             worker_thread = threading.Thread(
                 target=_run_gui_background_task,
-                args=(task_queue, worker),
+                args=(task_queue, lambda: worker(_report_progress, _report_event)),
                 daemon=True,
             )
             worker_thread.start()
 
             self.root.after(
-                100,
+                250,
                 lambda: self._poll_background_task(
                     task_queue,
                     on_success,
                     failure_title=failure_title,
                     failure_status=failure_status,
+                    event_handlers=event_handlers,
                 ),
             )
 
@@ -3341,21 +3572,40 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             *,
             failure_title: str,
             failure_status: str,
+            event_handlers: dict[str, Callable[[Any], None]] | None = None,
         ) -> None:
-            try:
-                result_type, payload = task_queue.get_nowait()
-            except queue.Empty:
+            terminal_message: tuple[str, Any] | None = None
+
+            while True:
+                try:
+                    result_type, payload = task_queue.get_nowait()
+                except queue.Empty:
+                    break
+
+                if result_type == "progress":
+                    self._refresh_busy_status(str(payload))
+                    continue
+                if event_handlers and result_type in event_handlers:
+                    event_handlers[result_type](payload)
+                    continue
+                terminal_message = (result_type, payload)
+                break
+
+            if terminal_message is None:
+                self._refresh_busy_status()
                 self.root.after(
-                    100,
+                    250,
                     lambda: self._poll_background_task(
                         task_queue,
                         on_success,
                         failure_title=failure_title,
                         failure_status=failure_status,
+                        event_handlers=event_handlers,
                     ),
                 )
                 return
 
+            result_type, payload = terminal_message
             self._set_busy_state(False)
             if result_type == "error":
                 self.status_var.set(failure_status)
@@ -3816,13 +4066,16 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                 if not etl_path:
                     self.output_help_var.set(
                         "Auto mode is on. Choose an ETL and the app will create "
-                        "report, metrics, timeline, and plot outputs next to it."
+                        "report, metrics, timeline, and plot outputs in a timestamped folder."
                     )
                     return
                 suggested = _suggest_output_paths(etl_path)
+                folder_name = os.path.basename(
+                    os.path.dirname(suggested["report_path"])
+                )
                 self.output_help_var.set(
-                    "Auto mode is on. Files will be created automatically using the ETL "
-                    "name: "
+                    "Auto mode is on. Files will be created automatically in "
+                    f"{folder_name}: "
                     f"{os.path.basename(suggested['report_path'])}, "
                     f"{os.path.basename(suggested['metrics_output_path'])}, "
                     f"{os.path.basename(suggested['timeline_output_path'])}, and "
@@ -3850,6 +4103,126 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                 self._apply_suggested_output_paths(force=True)
             self._update_output_mode_ui()
 
+        def _render_analysis_panels(
+            self,
+            result: dict[str, Any],
+            *,
+            status_text: str | None,
+            in_progress: bool,
+        ) -> None:
+            etl_path = self._analysis_context.get("etl_path")
+            compare_source = self._analysis_context.get("compare_source")
+            report_requested = bool(self._analysis_context.get("report_requested"))
+
+            baseline_data = result.get("baseline_metrics")
+            if (
+                baseline_data is None
+                and not in_progress
+                and self.compare_metrics_var.get().strip()
+            ):
+                try:
+                    with open(
+                        self.compare_metrics_var.get().strip(),
+                        "r",
+                        encoding="utf-8",
+                    ) as handle:
+                        baseline_data = json.load(handle)
+                except Exception:
+                    baseline_data = None
+
+            self._set_text(
+                self.analysis_summary_text,
+                _build_analysis_summary(
+                    result,
+                    etl_path=etl_path,
+                    compare_source=compare_source,
+                    status_text=status_text,
+                    in_progress=in_progress,
+                ),
+            )
+
+            metrics_data = result.get("metrics")
+            if metrics_data:
+                metrics_text = _format_json_block(metrics_data)
+            elif in_progress:
+                metrics_text = "Waiting for primary ETL metrics..."
+            else:
+                metrics_text = _format_json_block({})
+            self._set_text(self.analysis_metrics_text, metrics_text)
+
+            if baseline_data:
+                baseline_text = _format_json_block(baseline_data)
+            elif compare_source and in_progress:
+                baseline_text = "Waiting for baseline metrics..."
+            else:
+                baseline_text = _format_json_block({})
+            self._set_text(self.analysis_baseline_text, baseline_text)
+
+            comparison_data = result.get("comparison")
+            if comparison_data:
+                comparison_text = _format_json_block(comparison_data)
+            elif compare_source and in_progress:
+                comparison_text = "Waiting for comparison results..."
+            else:
+                comparison_text = _format_json_block({})
+            self._set_text(self.analysis_comparison_text, comparison_text)
+
+            report_text = result.get("report_html")
+            if report_text:
+                report_block = _format_html_block(report_text)
+            elif not in_progress:
+                report_block = (
+                    _format_html_block(_read_text_file(result.get("report_path")))
+                    or "No HTML report was generated."
+                )
+            elif report_requested:
+                report_block = "Waiting for HTML rendering to complete..."
+            else:
+                report_block = "No HTML report requested for this run."
+            self._set_text(self.analysis_report_text, report_block)
+
+            self._sync_followup_paths(result)
+
+            if comparison_data:
+                self._set_text(
+                    self.compare_output_text,
+                    _format_json_block({"deltas": comparison_data}),
+                )
+
+        def _reset_analysis_progress(
+            self,
+            *,
+            etl_path: str,
+            compare_source: str | None,
+            report_requested: bool,
+            running_text: str,
+        ) -> None:
+            self._analysis_context = {
+                "etl_path": etl_path,
+                "compare_source": compare_source,
+                "report_requested": report_requested,
+            }
+            self._analysis_live_result = {
+                "warnings": [],
+                "plot_paths": {},
+            }
+            self._render_analysis_panels(
+                self._analysis_live_result,
+                status_text=running_text,
+                in_progress=True,
+            )
+
+        def _apply_analysis_progress(self, payload: dict[str, Any]) -> None:
+            self._analysis_live_result = _merge_analysis_progress_result(
+                self._analysis_live_result,
+                payload.get("updates"),
+            )
+            self._render_analysis_panels(
+                self._analysis_live_result,
+                status_text=str(payload.get("status_text") or "Working..."),
+                in_progress=True,
+            )
+
         def _sync_followup_paths(self, result: dict[str, Any]) -> None:
             metrics_path = result.get("metrics_path")
             if metrics_path:
@@ -3872,54 +4245,20 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             etl_path: str,
             compare_source: str | None,
         ) -> None:
-            baseline_data = result.get("baseline_metrics")
-            if baseline_data is None and self.compare_metrics_var.get().strip():
-                try:
-                    with open(
-                        self.compare_metrics_var.get().strip(),
-                        "r",
-                        encoding="utf-8",
-                    ) as handle:
-                        baseline_data = json.load(handle)
-                except Exception:
-                    baseline_data = None
-
-            self._set_text(
-                self.analysis_summary_text,
-                _build_analysis_summary(
-                    result,
-                    etl_path=etl_path,
-                    compare_source=compare_source,
-                ),
+            self._analysis_context = {
+                "etl_path": etl_path,
+                "compare_source": compare_source,
+                "report_requested": bool(result.get("report_path") or self.report_path_var.get().strip()),
+            }
+            self._analysis_live_result = _merge_analysis_progress_result(
+                self._analysis_live_result,
+                result,
             )
-            self._set_text(
-                self.analysis_metrics_text,
-                _format_json_block(result.get("metrics", {})),
+            self._render_analysis_panels(
+                self._analysis_live_result,
+                status_text="Analysis complete.",
+                in_progress=False,
             )
-            self._set_text(
-                self.analysis_baseline_text,
-                _format_json_block(baseline_data or {}),
-            )
-            self._set_text(
-                self.analysis_comparison_text,
-                _format_json_block(result.get("comparison", {})),
-            )
-            report_text = result.get("report_html") or _read_text_file(
-                result.get("report_path")
-            )
-            self._set_text(
-                self.analysis_report_text,
-                _format_html_block(report_text) or "No HTML report was generated.",
-            )
-
-            self._sync_followup_paths(result)
-
-            if result.get("comparison"):
-                self._set_text(
-                    self.compare_output_text,
-                    _format_json_block({"deltas": result["comparison"]}),
-                )
-
             self.status_var.set("Analysis complete.")
 
         def _apply_compare_metrics_result(self, result: dict[str, Any]) -> None:
@@ -3969,7 +4308,17 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                 messagebox.showerror("Analysis failed", str(exc))
                 return
 
-            def _worker() -> dict[str, Any]:
+            self._reset_analysis_progress(
+                etl_path=etl_path,
+                compare_source=compare_source or None,
+                report_requested=bool(outputs["report_path"]),
+                running_text="Preparing ETL analysis...",
+            )
+
+            def _worker(
+                report_progress: Callable[[str], None],
+                report_event: Callable[[str, Any], None],
+            ) -> dict[str, Any]:
                 return run_analysis_job(
                     etl_path=etl_path,
                     report_path=outputs["report_path"],
@@ -3993,6 +4342,10 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                     force_etl_observer=force_etl_observer,
                     return_metrics=True,
                     return_baseline_metrics=True,
+                    progress_callback=report_progress,
+                    progress_event_callback=lambda payload: report_event(
+                        "analysis_progress", payload
+                    ),
                 )
 
             self._start_background_task(
@@ -4002,9 +4355,10 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                     etl_path=etl_path,
                     compare_source=compare_source or None,
                 ),
-                running_text="Running ETL analysis... The progress bar shows the UI is still active.",
+                running_text="Preparing ETL analysis...",
                 failure_title="Analysis failed",
                 failure_status="Analysis failed.",
+                event_handlers={"analysis_progress": self._apply_analysis_progress},
             )
 
         def _run_compare_metrics(self) -> None:
@@ -4017,15 +4371,20 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                 )
                 return
 
-            def _worker() -> dict[str, Any]:
+            def _worker(
+                report_progress: Callable[[str], None],
+                _report_event: Callable[[str, Any], None],
+            ) -> dict[str, Any]:
+                report_progress("Loading metrics files for comparison...")
                 from etl_agent import compare_and_score
 
+                report_progress("Scoring metric deltas...")
                 return compare_and_score(current_path, baseline_path)
 
             self._start_background_task(
                 _worker,
                 self._apply_compare_metrics_result,
-                running_text="Comparing metrics... The progress bar shows the UI is still active.",
+                running_text="Preparing metrics comparison...",
                 failure_title="Metrics comparison failed",
                 failure_status="Metrics comparison failed.",
             )
@@ -4051,9 +4410,14 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                 messagebox.showerror("Agentic diagnose failed", str(exc))
                 return
 
-            def _worker() -> dict[str, Any]:
+            def _worker(
+                report_progress: Callable[[str], None],
+                _report_event: Callable[[str, Any], None],
+            ) -> dict[str, Any]:
+                report_progress("Preparing Agentic Diagnose request...")
                 from etl_agent import review_with_llm
 
+                report_progress("Running Agentic Diagnose...")
                 return review_with_llm(
                     current=current_path,
                     baseline=baseline_path,
@@ -4068,7 +4432,7 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             self._start_background_task(
                 _worker,
                 self._apply_review_result,
-                running_text="Running agentic diagnose... The progress bar shows the UI is still active.",
+                running_text="Preparing Agentic Diagnose...",
                 failure_title="Agentic diagnose failed",
                 failure_status="Agentic diagnose failed.",
             )
