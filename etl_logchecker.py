@@ -69,6 +69,7 @@ class XmlEventWriter:
 
 
 TOOL_VERSION = "0.3.0"
+DEFAULT_PLOT_COLLECTION_TIMEOUT_S = 180.0
 
 EPOCH_SEC_MIN = 946684800  # 2000-01-01
 EPOCH_SEC_MAX = 2524608000  # 2050-01-01
@@ -1907,6 +1908,110 @@ def _collect_network_trends(
     return analyzer.network_trends()
 
 
+def _collect_network_trends_worker(
+    result_queue: Any,
+    etl_path: str,
+    bin_s: float,
+    timestamp_scale: float | None,
+    debug: bool,
+    tracerpt_exe: str | None,
+    use_tracerpt: bool,
+    use_etl_observer: bool,
+    force_etl_observer: bool,
+) -> None:
+    try:
+        trends = _collect_network_trends(
+            etl_path,
+            bin_s,
+            timestamp_scale,
+            debug,
+            tracerpt_exe,
+            use_tracerpt,
+            use_etl_observer,
+            force_etl_observer,
+        )
+    except Exception as exc:
+        result_queue.put({"ok": False, "error": str(exc)})
+    else:
+        result_queue.put({"ok": True, "trends": trends})
+
+
+def _collect_network_trends_with_timeout(
+    etl_path: str,
+    bin_s: float,
+    timestamp_scale: float | None,
+    debug: bool,
+    tracerpt_exe: str | None,
+    use_tracerpt: bool,
+    use_etl_observer: bool,
+    force_etl_observer: bool,
+    timeout_s: float = DEFAULT_PLOT_COLLECTION_TIMEOUT_S,
+) -> list[dict[str, float]]:
+    if timeout_s <= 0:
+        return _collect_network_trends(
+            etl_path,
+            bin_s,
+            timestamp_scale,
+            debug,
+            tracerpt_exe,
+            use_tracerpt,
+            use_etl_observer,
+            force_etl_observer,
+        )
+
+    try:
+        import multiprocessing as mp
+    except Exception:
+        return _collect_network_trends(
+            etl_path,
+            bin_s,
+            timestamp_scale,
+            debug,
+            tracerpt_exe,
+            use_tracerpt,
+            use_etl_observer,
+            force_etl_observer,
+        )
+
+    ctx = mp.get_context("spawn")
+    result_queue = ctx.Queue(maxsize=1)
+    process = ctx.Process(
+        target=_collect_network_trends_worker,
+        args=(
+            result_queue,
+            etl_path,
+            bin_s,
+            timestamp_scale,
+            debug,
+            tracerpt_exe,
+            use_tracerpt,
+            use_etl_observer,
+            force_etl_observer,
+        ),
+    )
+    process.daemon = True
+    process.start()
+    process.join(timeout_s)
+
+    if process.is_alive():
+        process.terminate()
+        process.join(2.0)
+        raise TimeoutError(f"network trend collection exceeded {timeout_s:.0f}s")
+
+    try:
+        payload = result_queue.get_nowait()
+    except queue.Empty:
+        raise RuntimeError(
+            "network trend collection exited without returning a result"
+        )
+
+    if payload.get("ok"):
+        trends = payload.get("trends")
+        return list(trends) if isinstance(trends, list) else []
+
+    raise RuntimeError(str(payload.get("error") or "network trend collection failed"))
+
+
 def _write_network_throughput_plot(
     trends: list[dict[str, float]],
     plot_dir: str,
@@ -2740,6 +2845,7 @@ def run_analysis_job(
     use_tracerpt: bool = True,
     use_etl_observer: bool = True,
     force_etl_observer: bool = False,
+    plot_collection_timeout_s: float = DEFAULT_PLOT_COLLECTION_TIMEOUT_S,
     return_metrics: bool = True,
     return_baseline_metrics: bool = False,
     progress_callback: Callable[[str], None] | None = None,
@@ -2773,6 +2879,8 @@ def run_analysis_job(
         raise ValueError("plot_bin_s must be greater than 0.")
     if boot_window_s <= 0:
         raise ValueError("boot_window_s must be greater than 0.")
+    if plot_collection_timeout_s < 0:
+        raise ValueError("plot_collection_timeout_s must be greater than or equal to 0.")
     if not use_etl_observer and force_etl_observer:
         raise ValueError(
             "Cannot use force_etl_observer when use_etl_observer is disabled."
@@ -2889,7 +2997,7 @@ def run_analysis_job(
         _report_progress("Collecting network trends for plots...")
         _publish_progress("Collecting network trends for plots...")
         try:
-            trends = _collect_network_trends(
+            trends = _collect_network_trends_with_timeout(
                 etl_path,
                 plot_bin_s,
                 timestamp_scale,
@@ -2898,6 +3006,7 @@ def run_analysis_job(
                 use_tracerpt,
                 use_etl_observer,
                 force_etl_observer,
+                timeout_s=plot_collection_timeout_s,
             )
         except Exception as exc:
             warnings.append(

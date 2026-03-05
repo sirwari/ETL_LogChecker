@@ -196,7 +196,7 @@ def test_run_analysis_job_plot_collection_failures_do_not_abort(monkeypatch, tmp
     )
     monkeypatch.setattr(
         etl_logchecker,
-        "_collect_network_trends",
+        "_collect_network_trends_with_timeout",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("trend parser failed")),
     )
     monkeypatch.setattr(
