@@ -11,6 +11,7 @@ def test_render_report_shows_added_metrics():
             "duration_s": 12.0,
             "event_count": 120,
             "events_per_s": 10.0,
+            "events_per_process": 15.0,
             "process_count": 8,
             "user_process_count": 6,
         },
@@ -24,6 +25,7 @@ def test_render_report_shows_added_metrics():
             "total_ops": 50,
             "total_bytes": 4096,
             "avg_bytes_per_op": 81.92,
+            "throughput_bytes_per_s": 341.33,
             "slow_ops": 5,
             "slow_ops_pct": 0.1,
             "slow_time_s": 1.5,
@@ -47,9 +49,12 @@ def test_render_report_shows_added_metrics():
     html = _render_report(metrics)
 
     assert "Events / s" in html
+    assert "Events / process" in html
     assert "Processes" in html
     assert "User processes" in html
     assert "Slow ops %" in html
+    assert "I/O p99" in html
+    assert "I/O throughput" in html
     assert "Launch avg:" in html
     assert "Avg I/O bytes / op:" in html
     assert "Boot order entries: 2" in html

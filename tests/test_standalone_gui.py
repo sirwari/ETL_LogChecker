@@ -1,5 +1,6 @@
 import os
 import queue
+import re
 import sys
 
 import etl_logchecker
@@ -8,10 +9,13 @@ import etl_logchecker
 def test_suggest_output_paths_uses_etl_stem():
     paths = etl_logchecker._suggest_output_paths("/tmp/bootLog.etl")
 
-    assert paths["report_path"] == os.path.join("/tmp", "bootLog_report.html")
-    assert paths["metrics_output_path"] == os.path.join("/tmp", "bootLog_metrics.json")
-    assert paths["timeline_output_path"] == os.path.join("/tmp", "bootLog_timeline.json")
-    assert paths["plot_dir"] == os.path.join("/tmp", "bootLog_plots")
+    run_dir = os.path.dirname(paths["report_path"])
+    assert os.path.dirname(run_dir) == "/tmp"
+    assert re.fullmatch(r"bootLog_\d{8}_\d{4}", os.path.basename(run_dir))
+    assert paths["report_path"] == os.path.join(run_dir, "bootLog_report.html")
+    assert paths["metrics_output_path"] == os.path.join(run_dir, "bootLog_metrics.json")
+    assert paths["timeline_output_path"] == os.path.join(run_dir, "bootLog_timeline.json")
+    assert paths["plot_dir"] == os.path.join(run_dir, "bootLog_plots")
 
 
 def test_resolve_analysis_output_paths_auto_uses_suggested_names():
@@ -20,10 +24,14 @@ def test_resolve_analysis_output_paths_auto_uses_suggested_names():
         auto_generate=True,
     )
 
-    assert paths["report_path"] == os.path.join("/tmp", "bootLog_report.html")
-    assert paths["metrics_output_path"] == os.path.join("/tmp", "bootLog_metrics.json")
-    assert paths["timeline_output_path"] == os.path.join("/tmp", "bootLog_timeline.json")
-    assert paths["plot_dir"] == os.path.join("/tmp", "bootLog_plots")
+    report_path = str(paths["report_path"])
+    run_dir = os.path.dirname(report_path)
+    assert os.path.dirname(run_dir) == "/tmp"
+    assert re.fullmatch(r"bootLog_\d{8}_\d{4}", os.path.basename(run_dir))
+    assert paths["report_path"] == os.path.join(run_dir, "bootLog_report.html")
+    assert paths["metrics_output_path"] == os.path.join(run_dir, "bootLog_metrics.json")
+    assert paths["timeline_output_path"] == os.path.join(run_dir, "bootLog_timeline.json")
+    assert paths["plot_dir"] == os.path.join(run_dir, "bootLog_plots")
 
 
 def test_resolve_analysis_output_paths_manual_preserves_selected_values():
@@ -81,6 +89,38 @@ def test_build_analysis_summary_includes_artifacts_and_comparison():
     assert "Plot (network_throughput): plots/network.png" in summary
     assert "Warnings:" in summary
     assert "Comparison deltas:" in summary
+
+
+def test_build_analysis_summary_includes_stage_details():
+    summary = etl_logchecker._build_analysis_summary(
+        {"metrics": {}},
+        etl_path="trace.etl",
+        status_text="Analyzing baseline ETL trace...",
+        in_progress=True,
+    )
+
+    assert "Stage: Analyzing baseline ETL trace..." in summary
+    assert "Run state: In progress" in summary
+
+
+def test_merge_analysis_progress_result_replaces_mutable_fields():
+    merged = etl_logchecker._merge_analysis_progress_result(
+        {
+            "warnings": ["old warning"],
+            "plot_paths": {"old": "old.png"},
+            "metrics": {"trace": {"duration_s": 1.0}},
+        },
+        {
+            "warnings": ["new warning"],
+            "plot_paths": {"network_throughput": "new.png"},
+            "comparison": {"duration_s": {"delta": 0.5}},
+        },
+    )
+
+    assert merged["warnings"] == ["new warning"]
+    assert merged["plot_paths"] == {"network_throughput": "new.png"}
+    assert merged["metrics"] == {"trace": {"duration_s": 1.0}}
+    assert merged["comparison"] == {"duration_s": {"delta": 0.5}}
 
 
 def test_main_routes_gui_mode(monkeypatch):

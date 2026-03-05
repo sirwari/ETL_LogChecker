@@ -212,7 +212,7 @@ def _render_gui_mock_image(
     box(40, 392, 444, 676, "#f8fbff")
     write("Output Files", 60, 412)
     write_wrapped(
-        "Auto mode creates report, metrics, timeline, and plot outputs next to the ETL using the ETL name.",
+        "Auto mode creates report, metrics, timeline, and plot outputs in a timestamped ETL folder.",
         60,
         438,
         340,
@@ -313,7 +313,7 @@ def _render_gui_mock_image(
     box(24, height - 72, width - 24, height - 24, "#ffffff")
     box(48, height - 56, 316, height - 40, "#bfdbfe")
     box(48, height - 56, 228, height - 40, "#2563eb")
-    write("Running ETL analysis... The progress bar shows the UI is still active.", 340, height - 58)
+    write("Collecting network trends for plots... (elapsed 02m 14s)", 340, height - 58)
 
     image.save(output_path)
 

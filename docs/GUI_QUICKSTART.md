@@ -62,12 +62,12 @@ If Ollama is not reachable, the app falls back to the built-in heuristic summary
 and shows that fallback status in the output.
 
 ## 6. Generated Files
-With auto-output enabled, the GUI writes files next to the ETL trace using the ETL
-file name as the base:
-- `<trace>_report.html`
-- `<trace>_metrics.json`
-- `<trace>_timeline.json`
-- `<trace>_plots/`
+With auto-output enabled, the GUI writes files in a timestamped folder named
+`<trace>_YYYYMMDD_HHMM`:
+- `<trace>_YYYYMMDD_HHMM/<trace>_report.html`
+- `<trace>_YYYYMMDD_HHMM/<trace>_metrics.json`
+- `<trace>_YYYYMMDD_HHMM/<trace>_timeline.json`
+- `<trace>_YYYYMMDD_HHMM/<trace>_plots/`
 
 ## 7. Troubleshooting
 - If the GUI does not open, verify that Tkinter is available in your Python build.

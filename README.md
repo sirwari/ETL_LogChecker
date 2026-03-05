@@ -39,7 +39,7 @@ python etl_logchecker.py --gui
 - Analyze one ETL and generate report, metrics JSON, timeline, and plots.
 - Compare current metrics JSON against a saved baseline.
 - Run Agentic Diagnose with Ollama-backed review or the built-in heuristic fallback.
-- Auto-create output file paths next to the selected ETL trace.
+- Auto-create output paths in a timestamped per-run folder (`<trace>_YYYYMMDD_HHMM`).
 
 ## Core Functionality
 - Streams ETL events instead of loading the full trace into memory.
