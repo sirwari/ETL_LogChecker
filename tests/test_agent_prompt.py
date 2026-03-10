@@ -93,3 +93,60 @@ def test_review_uses_ollama_backend_when_available(monkeypatch):
     assert result["backend"]["status"] == "ok"
     assert result["backend"]["used_ollama"] is True
     assert result["insights"]["summary"] == "Healthy run."
+
+
+def test_review_retries_ministral_alias_when_model_missing(monkeypatch):
+    seen_models: list[str] = []
+
+    def _chat(**kwargs):
+        model = kwargs["model"]
+        seen_models.append(model)
+        if model == "ministral-3:latest":
+            raise RuntimeError("model 'ministral-3:latest' not found, try pulling it first")
+        return {
+            "message": {
+                "content": json.dumps(
+                    {
+                        "summary": "Alias model responded.",
+                        "regressions": [],
+                        "improvements": [],
+                        "observations": [],
+                        "recommendations": [],
+                        "questions": [],
+                    }
+                )
+            }
+        }
+
+    monkeypatch.setattr(etl_agent, "ollama_chat", _chat)
+    result = etl_agent.review_with_llm(_sample_metrics(), model="ministral-3:latest")
+
+    assert result["heuristic_fallback"] is False
+    assert seen_models[:2] == ["ministral-3:latest", "ministral:latest"]
+    assert result["backend"]["model"] == "ministral:latest"
+    assert result["backend"]["model_alias_used"] is True
+
+
+def test_review_parses_code_fenced_json(monkeypatch):
+    def _chat(**kwargs):
+        return {
+            "message": {
+                "content": """```json
+{
+  "summary": "Parsed from fence.",
+  "regressions": [],
+  "improvements": [],
+  "observations": ["All good."],
+  "recommendations": [],
+  "questions": []
+}
+```"""
+            }
+        }
+
+    monkeypatch.setattr(etl_agent, "ollama_chat", _chat)
+    result = etl_agent.review_with_llm(_sample_metrics())
+
+    assert result["heuristic_fallback"] is False
+    assert result["backend"]["parse_mode"] == "code_fence"
+    assert result["insights"]["summary"] == "Parsed from fence."

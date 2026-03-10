@@ -56,6 +56,7 @@ python etl_logchecker.py --gui-quickstart
 - Open the `Agentic Diagnose` tab.
 - Select the current metrics JSON and, optionally, a baseline metrics JSON.
 - Leave the default `OLLAMA_HOST` and `OLLAMA_MODEL` values unless you need a custom setup.
+- If the first model name is not available locally, the app retries known `ministral` aliases automatically.
 - Click `Run Agentic Diagnose`.
 
 If Ollama is not reachable, the app falls back to the built-in heuristic summary

@@ -14,6 +14,7 @@ def test_render_report_shows_added_metrics():
             "events_per_process": 15.0,
             "process_count": 8,
             "user_process_count": 6,
+            "user_process_ratio_pct": 0.75,
         },
         "boot": {
             "boot_duration_s": 5.0,
@@ -30,11 +31,13 @@ def test_render_report_shows_added_metrics():
             "slow_ops_pct": 0.1,
             "slow_time_s": 1.5,
             "slow_time_pct": 0.125,
+            "slow_ops_per_s": 0.42,
+            "slow_time_avg_ms": 300.0,
             "percentiles_s": {"p50_s": 0.1, "p95_s": 0.5, "p99_s": 1.0},
             "histogram": {"<= 1 ms": 10},
         },
         "launch_latency": {
-            "stats": {"avg_s": 0.6, "p50_s": 0.5, "p95_s": 0.9},
+            "stats": {"avg_s": 0.6, "p50_s": 0.5, "p95_s": 0.9, "coverage_pct": 0.66},
             "top": [{"image": "app.exe", "pid": 1, "session_id": 1, "startup_latency_s": 0.9, "first_signal": "disk_io"}],
         },
         "top_processes": {
@@ -52,10 +55,14 @@ def test_render_report_shows_added_metrics():
     assert "Events / process" in html
     assert "Processes" in html
     assert "User processes" in html
+    assert "User process ratio" in html
     assert "Slow ops %" in html
+    assert "Slow ops / s" in html
+    assert "Avg slow I/O (ms)" in html
     assert "I/O p99" in html
     assert "I/O throughput" in html
     assert "Launch avg:" in html
+    assert "Launch coverage:" in html
     assert "Avg I/O bytes / op:" in html
     assert "Boot order entries: 2" in html
 
@@ -65,10 +72,12 @@ def test_format_review_diagnose_includes_backend_details():
         "backend": {
             "provider": "ollama",
             "host": "http://localhost:11434",
-            "model": "ministral-3:latest",
+            "model": "ministral:latest",
             "used_ollama": False,
             "status": "fallback",
             "error": "connection refused",
+            "attempted_models": ["ministral:latest", "ministral-3:latest"],
+            "request_timeout_s": 90.0,
         },
         "insights": {
             "summary": "Fallback summary.",
@@ -84,5 +93,7 @@ def test_format_review_diagnose_includes_backend_details():
 
     assert "Agentic Diagnose (Ollama)" in text
     assert "Status: Heuristic fallback" in text
+    assert "Attempted models: ministral:latest, ministral-3:latest" in text
+    assert "Timeout: 90.0s" in text
     assert "Fallback reason: connection refused" in text
     assert "- Launch p95 (12.00%)" in text

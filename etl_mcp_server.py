@@ -71,6 +71,7 @@ async def review_metrics(
     max_tokens: int = 800,
     focus: str | None = None,
     return_raw: bool = False,
+    timeout_s: float | None = None,
 ) -> dict[str, Any]:
     return _review_metrics(
         current=current,
@@ -81,6 +82,7 @@ async def review_metrics(
         max_tokens=max_tokens,
         focus=focus,
         return_raw=return_raw,
+        timeout_s=timeout_s,
     )
 
 
