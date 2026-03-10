@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ETL UX/Performance Report</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f6fb;
+      --card: #ffffff;
+      --text: #141b2d;
+      --muted: #5c677d;
+      --accent: #2e6bff;
+      --accent-soft: #e7efff;
+    }
+    body {
+      margin: 0;
+      font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      background: radial-gradient(circle at top, #ffffff, var(--bg));
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 32px 24px 80px;
+    }
+    h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+    h2 {
+      margin-top: 32px;
+      font-size: 20px;
+    }
+    .subtitle {
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+    .card {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 8px 20px rgba(20, 27, 45, 0.08);
+    }
+    .card h3 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+    .card .value {
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .section {
+      background: var(--card);
+      border-radius: 18px;
+      padding: 20px;
+      margin-top: 20px;
+      box-shadow: 0 10px 26px rgba(20, 27, 45, 0.07);
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      text-align: left;
+      padding: 8px;
+      border-bottom: 1px solid #e3e7f0;
+    }
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+    }
+    .empty {
+      color: var(--muted);
+      padding: 8px 0;
+    }
+    .timeline {
+      display: grid;
+      gap: 12px;
+    }
+    .timeline-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 8px;
+    }
+    .timeline-item {
+      display: grid;
+      grid-template-columns: 12px 1fr auto;
+      align-items: center;
+      column-gap: 8px;
+      font-size: 12px;
+    }
+    .timeline-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+    .timeline-label {
+      font-weight: 600;
+    }
+    .timeline-time {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .chart-label {
+      font-size: 10px;
+      fill: var(--muted);
+    }
+    .chart-value {
+      font-size: 10px;
+      fill: var(--text);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>ETL UX & Performance Report</h1>
+    <div class="subtitle">Generated 2026-02-26T12:41:30.630208Z • /Users/zogthein/ETL_LogChecker/20260226WPRCapture_ZO05N008W2.etl</div>
+
+    <div class="cards">
+      <div class="card"><h3>Trace duration</h3><div class="value">376064.48 h</div></div>
+      <div class="card"><h3>Slow I/O time</h3><div class="value">761.8 ms</div></div>
+      <div class="card"><h3>Slow I/O %</h3><div class="value">0.00%</div></div>
+      <div class="card"><h3>I/O p95</h3><div class="value">5.1 ms</div></div>
+    </div>
+
+    
+
+    <div class="section">
+      <h2>Boot timeline</h2>
+      <div class="timeline"><svg viewBox="0 0 760 100"><line x1="40" y1="50.0" x2="720" y2="50.0" stroke="#8892a6" stroke-width="2" /><circle cx="92.2" cy="50.0" r="6" fill="#2e6bff" /><circle cx="94.4" cy="50.0" r="6" fill="#24a28a" /><circle cx="96.8" cy="50.0" r="6" fill="#ff8a2d" /><circle cx="720.0" cy="50.0" r="6" fill="#c056d6" /><circle cx="323.1" cy="50.0" r="6" fill="#f05365" /></svg><ul class="timeline-list"><li class="timeline-item"><span class="timeline-dot" style="background:#2e6bff;"></span><span class="timeline-label">SMSS</span><span class="timeline-time">43.14 h</span></li><li class="timeline-item"><span class="timeline-dot" style="background:#24a28a;"></span><span class="timeline-label">Wininit</span><span class="timeline-time">44.91 h</span></li><li class="timeline-item"><span class="timeline-dot" style="background:#ff8a2d;"></span><span class="timeline-label">Winlogon</span><span class="timeline-time">46.92 h</span></li><li class="timeline-item"><span class="timeline-dot" style="background:#c056d6;"></span><span class="timeline-label">Explorer</span><span class="timeline-time">561.65 h</span></li><li class="timeline-item"><span class="timeline-dot" style="background:#f05365;"></span><span class="timeline-label">First user app</span><span class="timeline-time">233.79 h</span></li></ul></div>
+    </div>
+
+    <div class="section">
+      <h2>App launch latency (proxy)</h2>
+      <svg viewBox="0 0 720 320"><defs><linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2e6bff"/><stop offset="100%" stop-color="#5aa1ff"/></linearGradient></defs><rect x="0" y="0" width="720" height="320" fill="none"/><rect x="40.0" y="40.0" width="44.8" height="240.0" rx="4" fill="url(#barGradient)"/><text x="62.4" y="312" text-anchor="middle" class="chart-label">Registry</text><text x="62.4" y="34.0" text-anchor="middle" class="chart-value">454536792.00s</text><rect x="104.0" y="255.1" width="44.8" height="24.9" rx="4" fill="url(#barGradient)"/><text x="126.4" y="312" text-anchor="middle" class="chart-label">taskhostw.exe</text><text x="126.4" y="249.1" text-anchor="middle" class="chart-value">47080660.00s</text><rect x="168.0" y="263.8" width="44.8" height="16.2" rx="4" fill="url(#barGradient)"/><text x="190.4" y="312" text-anchor="middle" class="chart-label">backgroundTaskHost.exe</text><text x="190.4" y="257.8" text-anchor="middle" class="chart-value">30607099.00s</text><rect x="232.0" y="271.6" width="44.8" height="8.4" rx="4" fill="url(#barGradient)"/><text x="254.4" y="312" text-anchor="middle" class="chart-label">WavesSvc64.exe</text><text x="254.4" y="265.6" text-anchor="middle" class="chart-value">15879543.00s</text><rect x="296.0" y="273.2" width="44.8" height="6.8" rx="4" fill="url(#barGradient)"/><text x="318.4" y="312" text-anchor="middle" class="chart-label">PGSystemTray.exe</text><text x="318.4" y="267.2" text-anchor="middle" class="chart-value">12867319.00s</text><rect x="360.0" y="273.6" width="44.8" height="6.4" rx="4" fill="url(#barGradient)"/><text x="382.4" y="312" text-anchor="middle" class="chart-label">backgroundTaskHost.exe</text><text x="382.4" y="267.6" text-anchor="middle" class="chart-value">12129952.00s</text><rect x="424.0" y="274.7" width="44.8" height="5.3" rx="4" fill="url(#barGradient)"/><text x="446.4" y="312" text-anchor="middle" class="chart-label">backgroundTaskHost.exe</text><text x="446.4" y="268.7" text-anchor="middle" class="chart-value">10060506.00s</text><rect x="488.0" y="275.2" width="44.8" height="4.8" rx="4" fill="url(#barGradient)"/><text x="510.4" y="312" text-anchor="middle" class="chart-label">LockApp.exe</text><text x="510.4" y="269.2" text-anchor="middle" class="chart-value">9147543.00s</text><rect x="552.0" y="275.8" width="44.8" height="4.2" rx="4" fill="url(#barGradient)"/><text x="574.4" y="312" text-anchor="middle" class="chart-label">SCNotification.exe</text><text x="574.4" y="269.8" text-anchor="middle" class="chart-value">7949926.00s</text><rect x="616.0" y="277.4" width="44.8" height="2.6" rx="4" fill="url(#barGradient)"/><text x="638.4" y="312" text-anchor="middle" class="chart-label">ZSAHelper.exe</text><text x="638.4" y="271.4" text-anchor="middle" class="chart-value">5008721.00s</text></svg>
+      <table><thead><tr><th>Image</th><th>PID</th><th>Session</th><th>Latency</th><th>First signal</th></tr></thead><tbody><tr><td>Registry</td><td>184</td><td>4294967295</td><td>126260.22 h</td><td>disk_io</td></tr><tr><td>taskhostw.exe</td><td>1168</td><td>1</td><td>13077.96 h</td><td>disk_io</td></tr><tr><td>backgroundTaskHost.exe</td><td>18180</td><td>1</td><td>8501.97 h</td><td>disk_io</td></tr><tr><td>WavesSvc64.exe</td><td>16596</td><td>1</td><td>4410.98 h</td><td>disk_io</td></tr><tr><td>PGSystemTray.exe</td><td>17588</td><td>1</td><td>3574.26 h</td><td>disk_io</td></tr><tr><td>backgroundTaskHost.exe</td><td>14164</td><td>1</td><td>3369.43 h</td><td>disk_io</td></tr><tr><td>backgroundTaskHost.exe</td><td>6776</td><td>1</td><td>2794.59 h</td><td>disk_io</td></tr><tr><td>LockApp.exe</td><td>15928</td><td>1</td><td>2540.98 h</td><td>disk_io</td></tr><tr><td>SCNotification.exe</td><td>6904</td><td>1</td><td>2208.31 h</td><td>disk_io</td></tr><tr><td>ZSAHelper.exe</td><td>17888</td><td>1</td><td>1391.31 h</td><td>disk_io</td></tr></tbody></table>
+      <div class="subtitle">Latency is derived from first disk I/O or image load after process start.</div>
+    </div>
+
+    <div class="section grid-2">
+      <div>
+        <h2>Slow I/O offenders (time)</h2>
+        <svg viewBox="0 0 720 320"><defs><linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2e6bff"/><stop offset="100%" stop-color="#5aa1ff"/></linearGradient></defs><rect x="0" y="0" width="720" height="320" fill="none"/><rect x="40.0" y="40.0" width="44.8" height="240.0" rx="4" fill="url(#barGradient)"/><text x="62.4" y="312" text-anchor="middle" class="chart-label">KeePass.exe</text><text x="62.4" y="34.0" text-anchor="middle" class="chart-value">0.35s</text><rect x="104.0" y="171.1" width="44.8" height="108.9" rx="4" fill="url(#barGradient)"/><text x="126.4" y="312" text-anchor="middle" class="chart-label">System</text><text x="126.4" y="165.1" text-anchor="middle" class="chart-value">0.16s</text><rect x="168.0" y="196.2" width="44.8" height="83.8" rx="4" fill="url(#barGradient)"/><text x="190.4" y="312" text-anchor="middle" class="chart-label">svchost.exe</text><text x="190.4" y="190.2" text-anchor="middle" class="chart-value">0.12s</text><rect x="232.0" y="233.6" width="44.8" height="46.4" rx="4" fill="url(#barGradient)"/><text x="254.4" y="312" text-anchor="middle" class="chart-label">tlaworker.exe</text><text x="254.4" y="227.6" text-anchor="middle" class="chart-value">0.07s</text><rect x="296.0" y="240.8" width="44.8" height="39.2" rx="4" fill="url(#barGradient)"/><text x="318.4" y="312" text-anchor="middle" class="chart-label">MsSense.exe</text><text x="318.4" y="234.8" text-anchor="middle" class="chart-value">0.06s</text><rect x="360.0" y="280.0" width="44.8" height="0.0" rx="4" fill="url(#barGradient)"/><text x="382.4" y="312" text-anchor="middle" class="chart-label">lsass.exe</text><text x="382.4" y="274.0" text-anchor="middle" class="chart-value">0.00s</text><rect x="424.0" y="280.0" width="44.8" height="0.0" rx="4" fill="url(#barGradient)"/><text x="446.4" y="312" text-anchor="middle" class="chart-label">CmRcService.exe</text><text x="446.4" y="274.0" text-anchor="middle" class="chart-value">0.00s</text><rect x="488.0" y="280.0" width="44.8" height="0.0" rx="4" fill="url(#barGradient)"/><text x="510.4" y="312" text-anchor="middle" class="chart-label">cyserver.exe</text><text x="510.4" y="274.0" text-anchor="middle" class="chart-value">0.00s</text><rect x="552.0" y="280.0" width="44.8" height="0.0" rx="4" fill="url(#barGradient)"/><text x="574.4" y="312" text-anchor="middle" class="chart-label">svchost.exe</text><text x="574.4" y="274.0" text-anchor="middle" class="chart-value">0.00s</text><rect x="616.0" y="280.0" width="44.8" height="0.0" rx="4" fill="url(#barGradient)"/><text x="638.4" y="312" text-anchor="middle" class="chart-label">MsMpEng.exe</text><text x="638.4" y="274.0" text-anchor="middle" class="chart-value">0.00s</text></svg>
+        <table><thead><tr><th>Image</th><th>PID</th><th>Slow time</th><th>Slow ops</th></tr></thead><tbody><tr><td>KeePass.exe</td><td>15108</td><td>352.7 ms</td><td>1</td></tr><tr><td>System</td><td>4</td><td>160.1 ms</td><td>3</td></tr><tr><td>svchost.exe</td><td>6320</td><td>123.2 ms</td><td>1</td></tr><tr><td>tlaworker.exe</td><td>13052</td><td>68.2 ms</td><td>1</td></tr><tr><td>MsSense.exe</td><td>6548</td><td>57.6 ms</td><td>1</td></tr><tr><td>lsass.exe</td><td>1304</td><td>0.0 ms</td><td>0</td></tr><tr><td>CmRcService.exe</td><td>6284</td><td>0.0 ms</td><td>0</td></tr><tr><td>cyserver.exe</td><td>6304</td><td>0.0 ms</td><td>0</td></tr><tr><td>svchost.exe</td><td>2604</td><td>0.0 ms</td><td>0</td></tr><tr><td>MsMpEng.exe</td><td>6632</td><td>0.0 ms</td><td>0</td></tr></tbody></table>
+      </div>
+      <div>
+        <h2>Slow I/O offenders (count)</h2>
+        <svg viewBox="0 0 720 320"><defs><linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2e6bff"/><stop offset="100%" stop-color="#5aa1ff"/></linearGradient></defs><rect x="0" y="0" width="720" height="320" fill="none"/><rect x="40.0" y="40.0" width="44.8" height="240.0" rx="4" fill="url(#barGradient)"/><text x="62.4" y="312" text-anchor="middle" class="chart-label">System</text><text x="62.4" y="34.0" text-anchor="middle" class="chart-value">3.00</text><rect x="104.0" y="200.0" width="44.8" height="80.0" rx="4" fill="url(#barGradient)"/><text x="126.4" y="312" text-anchor="middle" class="chart-label">MsSense.exe</text><text x="126.4" y="194.0" text-anchor="middle" class="chart-value">1.00</text><rect x="168.0" y="200.0" width="44.8" height="80.0" rx="4" fill="url(#barGradient)"/><text x="190.4" y="312" text-anchor="middle" class="chart-label">svchost.exe</text><text x="190.4" y="194.0" text-anchor="middle" class="chart-value">1.00</text><rect x="232.0" y="200.0" width="44.8" height="80.0" rx="4" fill="url(#barGradient)"/><text x="254.4" y="312" text-anchor="middle" class="chart-label">tlaworker.exe</text><text x="254.4" y="194.0" text-anchor="middle" class="chart-value">1.00</text><rect x="296.0" y="200.0" width="44.8" height="80.0" rx="4" fill="url(#barGradient)"/><text x="318.4" y="312" text-anchor="middle" class="chart-label">KeePass.exe</text><text x="318.4" y="194.0" text-anchor="middle" class="chart-value">1.00</text><rect x="360.0" y="280.0" width="44.8" height="0.0" rx="4" fill="url(#barGradient)"/><text x="382.4" y="312" text-anchor="middle" class="chart-label">lsass.exe</text><text x="382.4" y="274.0" text-anchor="middle" class="chart-value">0.00</text><rect x="424.0" y="280.0" width="44.8" height="0.0" rx="4" fill="url(#barGradient)"/><text x="446.4" y="312" text-anchor="middle" class="chart-label">CmRcService.exe</text><text x="446.4" y="274.0" text-anchor="middle" class="chart-value">0.00</text><rect x="488.0" y="280.0" width="44.8" height="0.0" rx="4" fill="url(#barGradient)"/><text x="510.4" y="312" text-anchor="middle" class="chart-label">cyserver.exe</text><text x="510.4" y="274.0" text-anchor="middle" class="chart-value">0.00</text><rect x="552.0" y="280.0" width="44.8" height="0.0" rx="4" fill="url(#barGradient)"/><text x="574.4" y="312" text-anchor="middle" class="chart-label">svchost.exe</text><text x="574.4" y="274.0" text-anchor="middle" class="chart-value">0.00</text><rect x="616.0" y="280.0" width="44.8" height="0.0" rx="4" fill="url(#barGradient)"/><text x="638.4" y="312" text-anchor="middle" class="chart-label">MsMpEng.exe</text><text x="638.4" y="274.0" text-anchor="middle" class="chart-value">0.00</text></svg>
+        <table><thead><tr><th>Image</th><th>PID</th><th>Slow ops</th><th>Slow time</th></tr></thead><tbody><tr><td>System</td><td>4</td><td>3</td><td>160.1 ms</td></tr><tr><td>MsSense.exe</td><td>6548</td><td>1</td><td>57.6 ms</td></tr><tr><td>svchost.exe</td><td>6320</td><td>1</td><td>123.2 ms</td></tr><tr><td>tlaworker.exe</td><td>13052</td><td>1</td><td>68.2 ms</td></tr><tr><td>KeePass.exe</td><td>15108</td><td>1</td><td>352.7 ms</td></tr><tr><td>lsass.exe</td><td>1304</td><td>0</td><td>0.0 ms</td></tr><tr><td>CmRcService.exe</td><td>6284</td><td>0</td><td>0.0 ms</td></tr><tr><td>cyserver.exe</td><td>6304</td><td>0</td><td>0.0 ms</td></tr><tr><td>svchost.exe</td><td>2604</td><td>0</td><td>0.0 ms</td></tr><tr><td>MsMpEng.exe</td><td>6632</td><td>0</td><td>0.0 ms</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <div class="section grid-2">
+      <div>
+        <h2>Disk I/O latency</h2>
+        <table><thead><tr><th>Percentile</th><th>Latency</th></tr></thead><tbody><tr><td>p50</td><td>0.2 ms</td></tr><tr><td>p95</td><td>5.1 ms</td></tr><tr><td>p99</td><td>18.5 ms</td></tr></tbody></table>
+        <svg viewBox="0 0 720 220"><rect x="40.0" y="100.0" width="40.7" height="80.0" rx="3" fill="#53b689" /><text x="60.4" y="212" text-anchor="middle" class="chart-label">&lt;= 0.1 ms</text><rect x="98.2" y="40.0" width="40.7" height="140.0" rx="3" fill="#53b689" /><text x="118.5" y="212" text-anchor="middle" class="chart-label">&lt;= 0.5 ms</text><rect x="156.4" y="171.4" width="40.7" height="8.6" rx="3" fill="#53b689" /><text x="176.7" y="212" text-anchor="middle" class="chart-label">&lt;= 1 ms</text><rect x="214.5" y="132.1" width="40.7" height="47.9" rx="3" fill="#53b689" /><text x="234.9" y="212" text-anchor="middle" class="chart-label">&lt;= 2 ms</text><rect x="272.7" y="178.4" width="40.7" height="1.6" rx="3" fill="#53b689" /><text x="293.1" y="212" text-anchor="middle" class="chart-label">&lt;= 5 ms</text><rect x="330.9" y="178.7" width="40.7" height="1.3" rx="3" fill="#53b689" /><text x="351.3" y="212" text-anchor="middle" class="chart-label">&lt;= 10 ms</text><rect x="389.1" y="178.6" width="40.7" height="1.4" rx="3" fill="#53b689" /><text x="409.5" y="212" text-anchor="middle" class="chart-label">&lt;= 20 ms</text><rect x="447.3" y="178.0" width="40.7" height="2.0" rx="3" fill="#53b689" /><text x="467.6" y="212" text-anchor="middle" class="chart-label">&lt;= 50 ms</text><rect x="505.5" y="180.0" width="40.7" height="0.0" rx="3" fill="#53b689" /><text x="525.8" y="212" text-anchor="middle" class="chart-label">&lt;= 100 ms</text><rect x="563.6" y="180.0" width="40.7" height="0.0" rx="3" fill="#53b689" /><text x="584.0" y="212" text-anchor="middle" class="chart-label">&lt;= 200 ms</text><rect x="621.8" y="180.0" width="40.7" height="0.0" rx="3" fill="#53b689" /><text x="642.2" y="212" text-anchor="middle" class="chart-label">&lt;= 500 ms</text></svg>
+      </div>
+      <div>
+        <h2>Top I/O bytes</h2>
+        <svg viewBox="0 0 720 320"><defs><linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2e6bff"/><stop offset="100%" stop-color="#5aa1ff"/></linearGradient></defs><rect x="0" y="0" width="720" height="320" fill="none"/><rect x="40.0" y="40.0" width="44.8" height="240.0" rx="4" fill="url(#barGradient)"/><text x="62.4" y="312" text-anchor="middle" class="chart-label">System</text><text x="62.4" y="34.0" text-anchor="middle" class="chart-value">6665.97 MB</text><rect x="104.0" y="276.4" width="44.8" height="3.6" rx="4" fill="url(#barGradient)"/><text x="126.4" y="312" text-anchor="middle" class="chart-label">MsMpEng.exe</text><text x="126.4" y="270.4" text-anchor="middle" class="chart-value">99.38 MB</text><rect x="168.0" y="277.1" width="44.8" height="2.9" rx="4" fill="url(#barGradient)"/><text x="190.4" y="312" text-anchor="middle" class="chart-label">cyserver.exe</text><text x="190.4" y="271.1" text-anchor="middle" class="chart-value">81.50 MB</text><rect x="232.0" y="277.3" width="44.8" height="2.7" rx="4" fill="url(#barGradient)"/><text x="254.4" y="312" text-anchor="middle" class="chart-label">CcmExec.exe</text><text x="254.4" y="271.3" text-anchor="middle" class="chart-value">75.75 MB</text><rect x="296.0" y="278.4" width="44.8" height="1.6" rx="4" fill="url(#barGradient)"/><text x="318.4" y="312" text-anchor="middle" class="chart-label">tlaworker.exe</text><text x="318.4" y="272.4" text-anchor="middle" class="chart-value">44.23 MB</text><rect x="360.0" y="278.7" width="44.8" height="1.3" rx="4" fill="url(#barGradient)"/><text x="382.4" y="312" text-anchor="middle" class="chart-label">nxtray.exe</text><text x="382.4" y="272.7" text-anchor="middle" class="chart-value">37.22 MB</text><rect x="424.0" y="278.9" width="44.8" height="1.1" rx="4" fill="url(#barGradient)"/><text x="446.4" y="312" text-anchor="middle" class="chart-label">nxtcoordinator.exe</text><text x="446.4" y="272.9" text-anchor="middle" class="chart-value">29.19 MB</text><rect x="488.0" y="279.0" width="44.8" height="1.0" rx="4" fill="url(#barGradient)"/><text x="510.4" y="312" text-anchor="middle" class="chart-label">ServiceShell.exe</text><text x="510.4" y="273.0" text-anchor="middle" class="chart-value">27.23 MB</text><rect x="552.0" y="279.3" width="44.8" height="0.7" rx="4" fill="url(#barGradient)"/><text x="574.4" y="312" text-anchor="middle" class="chart-label">tlaworker.exe</text><text x="574.4" y="273.3" text-anchor="middle" class="chart-value">20.62 MB</text><rect x="616.0" y="279.4" width="44.8" height="0.6" rx="4" fill="url(#barGradient)"/><text x="638.4" y="312" text-anchor="middle" class="chart-label">svchost.exe</text><text x="638.4" y="273.4" text-anchor="middle" class="chart-value">15.53 MB</text></svg>
+        <table><thead><tr><th>Image</th><th>PID</th><th>I/O bytes</th><th>I/O ops</th></tr></thead><tbody><tr><td>System</td><td>4</td><td>6.51 GB</td><td>18781</td></tr><tr><td>MsMpEng.exe</td><td>6632</td><td>99.38 MB</td><td>1304</td></tr><tr><td>cyserver.exe</td><td>6304</td><td>81.50 MB</td><td>1778</td></tr><tr><td>CcmExec.exe</td><td>19388</td><td>75.75 MB</td><td>3052</td></tr><tr><td>tlaworker.exe</td><td>14444</td><td>44.23 MB</td><td>211</td></tr><tr><td>nxtray.exe</td><td>14924</td><td>37.22 MB</td><td>177</td></tr><tr><td>nxtcoordinator.exe</td><td>3792</td><td>29.19 MB</td><td>517</td></tr><tr><td>ServiceShell.exe</td><td>19452</td><td>27.23 MB</td><td>240</td></tr><tr><td>tlaworker.exe</td><td>14000</td><td>20.62 MB</td><td>108</td></tr><tr><td>svchost.exe</td><td>4388</td><td>15.53 MB</td><td>1990</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Top files by slow I/O time</h2>
+      <table><thead><tr><th>File</th><th>Slow time</th><th>Slow ops</th></tr></thead><tbody><tr><td>\Device\HarddiskVolume3\Users\zomhecke\AppData\Local\Microsoft\OneDrive\Update\update.xml</td><td>352.7 ms</td><td>1</td></tr><tr><td>\Device\HarddiskVolume3\Windows\System32\WDI\LogFiles\WdiContextLog.etl.003</td><td>123.2 ms</td><td>1</td></tr><tr><td>\Device\HarddiskVolume3\Windows\CCM\dcmagent.dll</td><td>68.2 ms</td><td>1</td></tr><tr><td>\Device\HarddiskVolume3\ProgramData\Microsoft\Group Policy\History\{4F5529A4-98B8-4233-B302-4021ADD43E98}\Machine\Preferences\Registry\Registry.xml</td><td>57.6 ms</td><td>1</td></tr></tbody></table>
+    </div>
+  </div>
+</body>
+</html>

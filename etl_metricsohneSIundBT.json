@@ -1,0 +1,389 @@
+{
+  "metadata": {
+    "etl_path": "/Users/zogthein/ETL_LogChecker/20260226WPRCapture_ZO05N008W2.etl",
+    "generated_at": "2026-02-26T14:24:54.777451Z",
+    "tool_version": "0.3.0",
+    "slow_io_ms": 50
+  },
+  "trace": {
+    "start_ts": 73.9350194,
+    "end_ts": 216.5284572,
+    "duration_s": 142.5934378,
+    "event_count": 42357545
+  },
+  "boot": {
+    "boot_start_s": 0.0,
+    "smss_start_s": 0.00927459999999769,
+    "wininit_start_s": 0.009915899999995759,
+    "winlogon_start_s": 0.012007599999989793,
+    "logonui_start_s": null,
+    "explorer_start_s": 0.1243048999999985,
+    "first_user_app_s": 0.008691399999989358
+  },
+  "launch_latency": {
+    "top": [
+      {
+        "pid": 184,
+        "image": "Registry",
+        "session_id": 4294967295,
+        "startup_latency_s": 27.0823075,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 3984,
+        "image": "msedgewebview2.exe",
+        "session_id": 1,
+        "startup_latency_s": 7.810620099999994,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 8508,
+        "image": "msedgewebview2.exe",
+        "session_id": 1,
+        "startup_latency_s": 2.455560100000014,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 5232,
+        "image": "backgroundTaskHost.exe",
+        "session_id": 1,
+        "startup_latency_s": 2.1757101000000034,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 1244,
+        "image": "backgroundTaskHost.exe",
+        "session_id": 1,
+        "startup_latency_s": 1.9396871999999803,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 7660,
+        "image": "backgroundTaskHost.exe",
+        "session_id": 1,
+        "startup_latency_s": 1.3107952000000012,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 16940,
+        "image": "ms-teams.exe",
+        "session_id": 1,
+        "startup_latency_s": 1.0834322999999983,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 9256,
+        "image": "taskhostw.exe",
+        "session_id": 1,
+        "startup_latency_s": 0.7506343000000015,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 1848,
+        "image": "backgroundTaskHost.exe",
+        "session_id": 1,
+        "startup_latency_s": 0.7305254999999988,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 17476,
+        "image": "SecHealthUI.exe",
+        "session_id": 1,
+        "startup_latency_s": 0.6943426999999929,
+        "first_signal": "disk_io"
+      }
+    ],
+    "stats": {
+      "count": 95,
+      "p50_s": 0.0014656000000030645,
+      "p95_s": 1.3107952000000012,
+      "p99_s": 7.810620099999994
+    }
+  },
+  "io": {
+    "total_ops": 55180,
+    "total_bytes": 8446630400.0,
+    "slow_ops": 3,
+    "slow_time_s": 0.27932989999999996,
+    "slow_time_pct": 0.001958925349648874,
+    "percentiles_s": {
+      "p50_s": 0.0001799600934560841,
+      "p95_s": 0.003770632126397191,
+      "p99_s": 0.013023107700269518
+    },
+    "histogram": {
+      "<= 0.5 ms": 32832,
+      "<= 2 ms": 6358,
+      "<= 0.1 ms": 13795,
+      "<= 1 ms": 1174,
+      "<= 5 ms": 323,
+      "<= 10 ms": 286,
+      "<= 20 ms": 391,
+      "<= 50 ms": 18,
+      "<= 200 ms": 1,
+      "<= 100 ms": 2
+    }
+  },
+  "top_processes": {
+    "by_slow_time": [
+      {
+        "pid": 1820,
+        "image": "dwm.exe",
+        "slow_time_s": 0.13625009999999999,
+        "slow_ops": 1
+      },
+      {
+        "pid": 12656,
+        "image": "CcmExec.exe",
+        "slow_time_s": 0.0799346,
+        "slow_ops": 1
+      },
+      {
+        "pid": 3412,
+        "image": "msedgewebview2.exe",
+        "slow_time_s": 0.0631452,
+        "slow_ops": 1
+      },
+      {
+        "pid": 6364,
+        "image": "cyserver.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 6304,
+        "image": "CmRcService.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 4,
+        "image": "System",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 9068,
+        "image": "svchost.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 4252,
+        "image": "svchost.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 8048,
+        "image": "cortex-xdr-payload.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 1296,
+        "image": "lsass.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      }
+    ],
+    "by_slow_ops": [
+      {
+        "pid": 1820,
+        "image": "dwm.exe",
+        "slow_ops": 1,
+        "slow_time_s": 0.13625009999999999
+      },
+      {
+        "pid": 12656,
+        "image": "CcmExec.exe",
+        "slow_ops": 1,
+        "slow_time_s": 0.0799346
+      },
+      {
+        "pid": 3412,
+        "image": "msedgewebview2.exe",
+        "slow_ops": 1,
+        "slow_time_s": 0.0631452
+      },
+      {
+        "pid": 6364,
+        "image": "cyserver.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 6304,
+        "image": "CmRcService.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 4,
+        "image": "System",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 9068,
+        "image": "svchost.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 4252,
+        "image": "svchost.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 8048,
+        "image": "cortex-xdr-payload.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 1296,
+        "image": "lsass.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      }
+    ],
+    "by_io_bytes": [
+      {
+        "pid": 4,
+        "image": "System",
+        "io_bytes": 7636731904.0,
+        "io_ops": 23997
+      },
+      {
+        "pid": 6364,
+        "image": "cyserver.exe",
+        "io_bytes": 181383680.0,
+        "io_ops": 2393
+      },
+      {
+        "pid": 6776,
+        "image": "MsMpEng.exe",
+        "io_bytes": 108293120.0,
+        "io_ops": 1343
+      },
+      {
+        "pid": 3508,
+        "image": "ms-teams.exe",
+        "io_bytes": 51730944.0,
+        "io_ops": 2438
+      },
+      {
+        "pid": 13188,
+        "image": "explorer.exe",
+        "io_bytes": 48702976.0,
+        "io_ops": 2368
+      },
+      {
+        "pid": 3780,
+        "image": "OneDrive.exe",
+        "io_bytes": 43446272.0,
+        "io_ops": 2479
+      },
+      {
+        "pid": 16580,
+        "image": "msedgewebview2.exe",
+        "io_bytes": 36284416.0,
+        "io_ops": 3258
+      },
+      {
+        "pid": 12656,
+        "image": "CcmExec.exe",
+        "io_bytes": 35336704.0,
+        "io_ops": 2729
+      },
+      {
+        "pid": 13776,
+        "image": "tlaworker.exe",
+        "io_bytes": 33324032.0,
+        "io_ops": 162
+      },
+      {
+        "pid": 3732,
+        "image": "nxtcoordinator.exe",
+        "io_bytes": 29444096.0,
+        "io_ops": 468
+      }
+    ]
+  },
+  "top_files": [
+    {
+      "file": "\\Device\\HarddiskVolume3\\Windows\\CCM\\CMBITSManager.dll",
+      "slow_time_s": 0.0799346,
+      "slow_ops": 1
+    },
+    {
+      "file": "\\Device\\HarddiskVolume3\\Windows\\Prefetch\\MSEDGEWEBVIEW2.EXE-F355B287.pf",
+      "slow_time_s": 0.0631452,
+      "slow_ops": 1
+    }
+  ],
+  "process_lifetimes": [
+    {
+      "pid": 17344,
+      "image": "msedgewebview2.exe",
+      "session_id": 1,
+      "lifetime_s": 142.35798519999997
+    },
+    {
+      "pid": 17520,
+      "image": "ShellExperienceHost.exe",
+      "session_id": 1,
+      "lifetime_s": 142.28453639999998
+    },
+    {
+      "pid": 17708,
+      "image": "RuntimeBroker.exe",
+      "session_id": 1,
+      "lifetime_s": 142.28439549999996
+    },
+    {
+      "pid": 16452,
+      "image": "SenseCE.exe",
+      "session_id": 0,
+      "lifetime_s": 142.28357499999998
+    },
+    {
+      "pid": 16440,
+      "image": "pacjsworker.exe",
+      "session_id": 0,
+      "lifetime_s": 142.2833382
+    },
+    {
+      "pid": 5680,
+      "image": "msedgewebview2.exe",
+      "session_id": 1,
+      "lifetime_s": 142.28315069999996
+    },
+    {
+      "pid": 16588,
+      "image": "svchost.exe",
+      "session_id": 0,
+      "lifetime_s": 142.2823395
+    },
+    {
+      "pid": 17016,
+      "image": "svchost.exe",
+      "session_id": 0,
+      "lifetime_s": 142.28204569999997
+    },
+    {
+      "pid": 18180,
+      "image": "wpr.exe",
+      "session_id": 0,
+      "lifetime_s": 142.28169530000002
+    },
+    {
+      "pid": 16252,
+      "image": "msedgewebview2.exe",
+      "session_id": 1,
+      "lifetime_s": 142.28158939999997
+    }
+  ]
+}

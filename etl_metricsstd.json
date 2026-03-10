@@ -1,0 +1,400 @@
+{
+  "metadata": {
+    "etl_path": "/Users/zogthein/ETL_LogChecker/20260226WPRCapture_ZO05N008W2.etl",
+    "generated_at": "2026-02-26T12:41:30.630208Z",
+    "tool_version": "0.3.0",
+    "slow_io_ms": 50
+  },
+  "trace": {
+    "start_ts": 1059830548.0,
+    "end_ts": 2413662659.0,
+    "duration_s": 1353832111.0,
+    "event_count": 40709605
+  },
+  "boot": {
+    "boot_start_s": 0.0,
+    "smss_start_s": 155297.0,
+    "wininit_start_s": 161659.0,
+    "winlogon_start_s": 168907.0,
+    "logonui_start_s": null,
+    "explorer_start_s": 2021939.0,
+    "first_user_app_s": 841650.0
+  },
+  "launch_latency": {
+    "top": [
+      {
+        "pid": 184,
+        "image": "Registry",
+        "session_id": 4294967295,
+        "startup_latency_s": 454536792.0,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 1168,
+        "image": "taskhostw.exe",
+        "session_id": 1,
+        "startup_latency_s": 47080660.0,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 18180,
+        "image": "backgroundTaskHost.exe",
+        "session_id": 1,
+        "startup_latency_s": 30607099.0,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 16596,
+        "image": "WavesSvc64.exe",
+        "session_id": 1,
+        "startup_latency_s": 15879543.0,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 17588,
+        "image": "PGSystemTray.exe",
+        "session_id": 1,
+        "startup_latency_s": 12867319.0,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 14164,
+        "image": "backgroundTaskHost.exe",
+        "session_id": 1,
+        "startup_latency_s": 12129952.0,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 6776,
+        "image": "backgroundTaskHost.exe",
+        "session_id": 1,
+        "startup_latency_s": 10060506.0,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 15928,
+        "image": "LockApp.exe",
+        "session_id": 1,
+        "startup_latency_s": 9147543.0,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 6904,
+        "image": "SCNotification.exe",
+        "session_id": 1,
+        "startup_latency_s": 7949926.0,
+        "first_signal": "disk_io"
+      },
+      {
+        "pid": 17888,
+        "image": "ZSAHelper.exe",
+        "session_id": 1,
+        "startup_latency_s": 5008721.0,
+        "first_signal": "disk_io"
+      }
+    ],
+    "stats": {
+      "count": 74,
+      "p50_s": 1768.0,
+      "p95_s": 12867319.0,
+      "p99_s": 47080660.0
+    }
+  },
+  "io": {
+    "total_ops": 36184,
+    "total_bytes": 7721467904.0,
+    "slow_ops": 7,
+    "slow_time_s": 0.7618277999999999,
+    "slow_time_pct": 5.627195527496245e-10,
+    "percentiles_s": {
+      "p50_s": 0.00019049507205623066,
+      "p95_s": 0.0050914895150926615,
+      "p99_s": 0.01847559997244277
+    },
+    "histogram": {
+      "<= 0.5 ms": 17902,
+      "<= 1 ms": 1097,
+      "<= 0.1 ms": 10227,
+      "<= 2 ms": 6130,
+      "<= 50 ms": 260,
+      "<= 5 ms": 209,
+      "<= 20 ms": 184,
+      "<= 10 ms": 168,
+      "<= 200 ms": 1,
+      "<= 100 ms": 5,
+      "<= 500 ms": 1
+    }
+  },
+  "top_processes": {
+    "by_slow_time": [
+      {
+        "pid": 15108,
+        "image": "KeePass.exe",
+        "slow_time_s": 0.3526851,
+        "slow_ops": 1
+      },
+      {
+        "pid": 4,
+        "image": "System",
+        "slow_time_s": 0.16008319999999998,
+        "slow_ops": 3
+      },
+      {
+        "pid": 6320,
+        "image": "svchost.exe",
+        "slow_time_s": 0.12320139999999999,
+        "slow_ops": 1
+      },
+      {
+        "pid": 13052,
+        "image": "tlaworker.exe",
+        "slow_time_s": 0.0682377,
+        "slow_ops": 1
+      },
+      {
+        "pid": 6548,
+        "image": "MsSense.exe",
+        "slow_time_s": 0.057620399999999995,
+        "slow_ops": 1
+      },
+      {
+        "pid": 1304,
+        "image": "lsass.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 6284,
+        "image": "CmRcService.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 6304,
+        "image": "cyserver.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 2604,
+        "image": "svchost.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      },
+      {
+        "pid": 6632,
+        "image": "MsMpEng.exe",
+        "slow_time_s": 0.0,
+        "slow_ops": 0
+      }
+    ],
+    "by_slow_ops": [
+      {
+        "pid": 4,
+        "image": "System",
+        "slow_ops": 3,
+        "slow_time_s": 0.16008319999999998
+      },
+      {
+        "pid": 6548,
+        "image": "MsSense.exe",
+        "slow_ops": 1,
+        "slow_time_s": 0.057620399999999995
+      },
+      {
+        "pid": 6320,
+        "image": "svchost.exe",
+        "slow_ops": 1,
+        "slow_time_s": 0.12320139999999999
+      },
+      {
+        "pid": 13052,
+        "image": "tlaworker.exe",
+        "slow_ops": 1,
+        "slow_time_s": 0.0682377
+      },
+      {
+        "pid": 15108,
+        "image": "KeePass.exe",
+        "slow_ops": 1,
+        "slow_time_s": 0.3526851
+      },
+      {
+        "pid": 1304,
+        "image": "lsass.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 6284,
+        "image": "CmRcService.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 6304,
+        "image": "cyserver.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 2604,
+        "image": "svchost.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      },
+      {
+        "pid": 6632,
+        "image": "MsMpEng.exe",
+        "slow_ops": 0,
+        "slow_time_s": 0.0
+      }
+    ],
+    "by_io_bytes": [
+      {
+        "pid": 4,
+        "image": "System",
+        "io_bytes": 6989773312.0,
+        "io_ops": 18781
+      },
+      {
+        "pid": 6632,
+        "image": "MsMpEng.exe",
+        "io_bytes": 104209920.0,
+        "io_ops": 1304
+      },
+      {
+        "pid": 6304,
+        "image": "cyserver.exe",
+        "io_bytes": 85456896.0,
+        "io_ops": 1778
+      },
+      {
+        "pid": 19388,
+        "image": "CcmExec.exe",
+        "io_bytes": 79429632.0,
+        "io_ops": 3052
+      },
+      {
+        "pid": 14444,
+        "image": "tlaworker.exe",
+        "io_bytes": 46373376.0,
+        "io_ops": 211
+      },
+      {
+        "pid": 14924,
+        "image": "nxtray.exe",
+        "io_bytes": 39027200.0,
+        "io_ops": 177
+      },
+      {
+        "pid": 3792,
+        "image": "nxtcoordinator.exe",
+        "io_bytes": 30611968.0,
+        "io_ops": 517
+      },
+      {
+        "pid": 19452,
+        "image": "ServiceShell.exe",
+        "io_bytes": 28556288.0,
+        "io_ops": 240
+      },
+      {
+        "pid": 14000,
+        "image": "tlaworker.exe",
+        "io_bytes": 21624832.0,
+        "io_ops": 108
+      },
+      {
+        "pid": 4388,
+        "image": "svchost.exe",
+        "io_bytes": 16281088.0,
+        "io_ops": 1990
+      }
+    ]
+  },
+  "top_files": [
+    {
+      "file": "\\Device\\HarddiskVolume3\\Users\\zomhecke\\AppData\\Local\\Microsoft\\OneDrive\\Update\\update.xml",
+      "slow_time_s": 0.3526851,
+      "slow_ops": 1
+    },
+    {
+      "file": "\\Device\\HarddiskVolume3\\Windows\\System32\\WDI\\LogFiles\\WdiContextLog.etl.003",
+      "slow_time_s": 0.12320139999999999,
+      "slow_ops": 1
+    },
+    {
+      "file": "\\Device\\HarddiskVolume3\\Windows\\CCM\\dcmagent.dll",
+      "slow_time_s": 0.0682377,
+      "slow_ops": 1
+    },
+    {
+      "file": "\\Device\\HarddiskVolume3\\ProgramData\\Microsoft\\Group Policy\\History\\{4F5529A4-98B8-4233-B302-4021ADD43E98}\\Machine\\Preferences\\Registry\\Registry.xml",
+      "slow_time_s": 0.057620399999999995,
+      "slow_ops": 1
+    }
+  ],
+  "process_lifetimes": [
+    {
+      "pid": 8108,
+      "image": "svchost.exe",
+      "session_id": 0,
+      "lifetime_s": 1347066297.0
+    },
+    {
+      "pid": 14724,
+      "image": "msedgewebview2.exe",
+      "session_id": 1,
+      "lifetime_s": 1347063678.0
+    },
+    {
+      "pid": 7036,
+      "image": "svchost.exe",
+      "session_id": 0,
+      "lifetime_s": 1347054277.0
+    },
+    {
+      "pid": 18200,
+      "image": "taskhostw.exe",
+      "session_id": 1,
+      "lifetime_s": 1347050917.0
+    },
+    {
+      "pid": 9544,
+      "image": "msedgewebview2.exe",
+      "session_id": 1,
+      "lifetime_s": 1347046843.0
+    },
+    {
+      "pid": 16912,
+      "image": "msedgewebview2.exe",
+      "session_id": 1,
+      "lifetime_s": 1347043855.0
+    },
+    {
+      "pid": 10528,
+      "image": "msedgewebview2.exe",
+      "session_id": 1,
+      "lifetime_s": 1347033777.0
+    },
+    {
+      "pid": 17644,
+      "image": "dllhost.exe",
+      "session_id": 1,
+      "lifetime_s": 1347031975.0
+    },
+    {
+      "pid": 12240,
+      "image": "dllhost.exe",
+      "session_id": 1,
+      "lifetime_s": 1347027482.0
+    },
+    {
+      "pid": 18364,
+      "image": "RtkAudUService64.exe",
+      "session_id": 1,
+      "lifetime_s": 1347023828.0
+    }
+  ]
+}

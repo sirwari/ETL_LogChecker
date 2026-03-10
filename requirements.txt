@@ -1,0 +1,9 @@
+etl-parser
+# MCP server runtime
+mcp
+# Optional for nicer output
+# pandas>=2.0.0
+# Optional for plots
+# matplotlib>=3.7.0
+# Optional for tests
+# pytest>=7.0.0
