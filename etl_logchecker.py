@@ -3288,7 +3288,7 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                 value=os.environ.get("OLLAMA_HOST", "http://localhost:11434")
             )
             self.review_model_var = tk.StringVar(
-                value=os.environ.get("OLLAMA_MODEL", "gptoss20b")
+                value=os.environ.get("OLLAMA_MODEL", "ministral-3:latest")
             )
             self.review_temperature_var = tk.DoubleVar(value=0.2)
             self.review_max_tokens_var = tk.IntVar(value=800)

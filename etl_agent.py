@@ -258,7 +258,7 @@ def review_with_llm(
         comparison_result = compare_and_score(current_metrics, baseline)
 
     host = ollama_host or os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-    model_name = model or os.environ.get("OLLAMA_MODEL", "gptoss20b")
+    model_name = model or os.environ.get("OLLAMA_MODEL", "ministral-3:latest")
     backend = {
         "provider": "ollama",
         "host": host,

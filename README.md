@@ -192,13 +192,13 @@ Available tools:
 ## Ollama Notes
 Environment variables:
 - `OLLAMA_HOST` (default: `http://localhost:11434`)
-- `OLLAMA_MODEL` (default: `gptoss20b`)
+- `OLLAMA_MODEL` (default: `ministral-3:latest`)
 
 Typical setup:
 
 ```bash
 ollama serve
-ollama pull gptoss20b
+ollama pull ministral-3:latest
 ```
 
 If Ollama is unavailable, Agentic Diagnose falls back to the built-in heuristic

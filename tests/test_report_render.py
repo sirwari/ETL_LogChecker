@@ -65,7 +65,7 @@ def test_format_review_diagnose_includes_backend_details():
         "backend": {
             "provider": "ollama",
             "host": "http://localhost:11434",
-            "model": "gptoss20b",
+            "model": "ministral-3:latest",
             "used_ollama": False,
             "status": "fallback",
             "error": "connection refused",
