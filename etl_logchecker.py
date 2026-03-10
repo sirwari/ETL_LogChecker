@@ -1675,6 +1675,11 @@ class ETLUXAnalyzer:
             for pid in self.pid_start_ts
             if (self._safe_int(self.pid_info.get(pid, {}).get("session_id")) or 0) > 0
         )
+        latency_stats["coverage_pct"] = (
+            _safe_div(float(len(latency_values_sorted)), float(user_process_count))
+            if user_process_count > 0
+            else 0.0
+        )
 
         io_quantiles = self.quantiles.values()
         io_percentiles = {
@@ -1776,6 +1781,11 @@ class ETLUXAnalyzer:
                 else None,
                 "process_count": process_count,
                 "user_process_count": user_process_count,
+                "user_process_ratio_pct": _safe_div(
+                    float(user_process_count), float(process_count)
+                )
+                if process_count > 0
+                else 0.0,
             },
             "boot": boot_data,
             "launch_latency": {
@@ -1802,6 +1812,15 @@ class ETLUXAnalyzer:
                 "slow_time_s": self.total_slow_io_time_s,
                 "slow_time_pct": _safe_div(self.total_slow_io_time_s, trace_duration)
                 if trace_duration > 0
+                else 0.0,
+                "slow_ops_per_s": _safe_div(float(self.slow_io_ops), trace_duration)
+                if trace_duration > 0
+                else 0.0,
+                "slow_time_avg_ms": _safe_div(
+                    self.total_slow_io_time_s * 1000.0,
+                    float(self.slow_io_ops),
+                )
+                if self.slow_io_ops > 0
                 else 0.0,
                 "percentiles_s": io_percentiles,
                 "histogram": dict(self.histogram),
@@ -2269,10 +2288,14 @@ def _render_report(
     events_per_process = trace.get("events_per_process")
     process_count = trace.get("process_count")
     user_process_count = trace.get("user_process_count")
+    user_process_ratio_pct = float(trace.get("user_process_ratio_pct", 0.0) or 0.0) * 100.0
     avg_bytes_per_op = io.get("avg_bytes_per_op")
     io_throughput = io.get("throughput_bytes_per_s")
+    slow_ops_per_s = io.get("slow_ops_per_s")
+    slow_time_avg_ms = io.get("slow_time_avg_ms")
     launch_p95 = launch_stats.get("p95_s")
     launch_avg = launch_stats.get("avg_s")
+    launch_coverage_pct = float(launch_stats.get("coverage_pct", 0.0) or 0.0) * 100.0
     boot_order_count = boot.get("boot_order_count")
 
     launch_top = launch.get("top", [])
@@ -2628,9 +2651,12 @@ def _render_report(
       <div class="card"><h3>Events / process</h3><div class="value">{f"{float(events_per_process):.2f}" if events_per_process is not None else "n/a"}</div></div>
       <div class="card"><h3>Processes</h3><div class="value">{int(process_count) if process_count is not None else "n/a"}</div></div>
       <div class="card"><h3>User processes</h3><div class="value">{int(user_process_count) if user_process_count is not None else "n/a"}</div></div>
+      <div class="card"><h3>User process ratio</h3><div class="value">{user_process_ratio_pct:.2f}%</div></div>
       <div class="card"><h3>Slow I/O time</h3><div class="value">{_format_seconds(io.get("slow_time_s"))}</div></div>
       <div class="card"><h3>Slow I/O %</h3><div class="value">{slow_pct:.2f}%</div></div>
       <div class="card"><h3>Slow ops %</h3><div class="value">{slow_ops_pct:.2f}%</div></div>
+      <div class="card"><h3>Slow ops / s</h3><div class="value">{f"{float(slow_ops_per_s):.2f}" if slow_ops_per_s is not None else "n/a"}</div></div>
+      <div class="card"><h3>Avg slow I/O (ms)</h3><div class="value">{f"{float(slow_time_avg_ms):.2f}" if slow_time_avg_ms is not None else "n/a"}</div></div>
       <div class="card"><h3>I/O p95</h3><div class="value">{_format_seconds(io_percentiles.get("p95_s"))}</div></div>
       <div class="card"><h3>I/O p99</h3><div class="value">{_format_seconds(io_percentiles.get("p99_s"))}</div></div>
       <div class="card"><h3>I/O throughput</h3><div class="value">{_format_bytes(io_throughput) + "/s" if io_throughput is not None else "n/a"}</div></div>
@@ -2654,6 +2680,7 @@ def _render_report(
         <span><strong>Launch avg:</strong> {_format_seconds(launch_avg)}</span>
         <span><strong>Launch p50:</strong> {_format_seconds(launch_stats.get("p50_s"))}</span>
         <span><strong>Launch p95:</strong> {_format_seconds(launch_p95)}</span>
+        <span><strong>Launch coverage:</strong> {launch_coverage_pct:.2f}%</span>
         <span><strong>Tracked processes:</strong> {int(process_count) if process_count is not None else "n/a"}</span>
         <span><strong>User processes:</strong> {int(user_process_count) if user_process_count is not None else "n/a"}</span>
         <span><strong>Avg I/O bytes / op:</strong> {_format_bytes(avg_bytes_per_op)}</span>
@@ -3107,6 +3134,7 @@ def _build_analysis_summary(
             and trace.get("user_process_count") is not None
             else "n/a"
         ),
+        f"User process ratio: {(float(trace.get('user_process_ratio_pct', 0.0) or 0.0) * 100.0):.2f}%",
         f"Slow I/O time: {_format_seconds(io.get('slow_time_s'))}",
         "I/O throughput: "
         + (
@@ -3116,9 +3144,22 @@ def _build_analysis_summary(
         ),
         f"Slow I/O %: {(float(io.get('slow_time_pct', 0.0) or 0.0) * 100.0):.2f}%",
         f"Slow ops %: {(float(io.get('slow_ops_pct', 0.0) or 0.0) * 100.0):.2f}%",
+        "Slow ops / s: "
+        + (
+            f"{float(io.get('slow_ops_per_s')):.2f}"
+            if io.get("slow_ops_per_s") is not None
+            else "n/a"
+        ),
+        "Avg slow I/O latency: "
+        + (
+            f"{float(io.get('slow_time_avg_ms')):.2f} ms"
+            if io.get("slow_time_avg_ms") is not None
+            else "n/a"
+        ),
         f"I/O p95: {_format_seconds(io_percentiles.get('p95_s'))}",
         f"I/O p99: {_format_seconds(io_percentiles.get('p99_s'))}",
         f"Launch p95: {_format_seconds(launch_stats.get('p95_s'))}",
+        f"Launch coverage: {(float(launch_stats.get('coverage_pct', 0.0) or 0.0) * 100.0):.2f}%",
         f"Boot duration: {_format_seconds(boot.get('boot_duration_s'))}",
         f"Boot order entries: {int(boot.get('boot_order_count', 0) or 0)}",
     ])
@@ -3200,6 +3241,19 @@ def _format_review_diagnose(result: dict[str, Any]) -> str:
         f"Host: {backend.get('host') or 'n/a'}",
         f"Model: {backend.get('model') or 'n/a'}",
     ]
+    attempted_models = backend.get("attempted_models")
+    if isinstance(attempted_models, list) and attempted_models:
+        lines.append(
+            "Attempted models: " + ", ".join(str(item) for item in attempted_models)
+        )
+    timeout_s = backend.get("request_timeout_s")
+    if isinstance(timeout_s, (int, float)):
+        lines.append(f"Timeout: {float(timeout_s):.1f}s")
+    parse_mode = backend.get("parse_mode")
+    if parse_mode:
+        lines.append(f"Response parse mode: {parse_mode}")
+    if backend.get("model_alias_used"):
+        lines.append("Model alias fallback: yes")
 
     error = backend.get("error")
     if error:
@@ -3288,7 +3342,7 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                 value=os.environ.get("OLLAMA_HOST", "http://localhost:11434")
             )
             self.review_model_var = tk.StringVar(
-                value=os.environ.get("OLLAMA_MODEL", "ministral-3:latest")
+                value=os.environ.get("OLLAMA_MODEL", "ministral:latest")
             )
             self.review_temperature_var = tk.DoubleVar(value=0.2)
             self.review_max_tokens_var = tk.IntVar(value=800)

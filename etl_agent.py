@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import math
 import os
+import re
 import urllib.request
 from typing import Any, Iterable
 
@@ -32,6 +34,17 @@ METRIC_LABELS = {
     "explorer_start_s": "Explorer start",
     "boot_duration_s": "Boot duration",
 }
+
+DEFAULT_OLLAMA_HOST = "http://localhost:11434"
+DEFAULT_OLLAMA_MODEL = "ministral:latest"
+DEFAULT_OLLAMA_TIMEOUT_S = 90.0
+_INSIGHT_LIST_KEYS = (
+    "regressions",
+    "improvements",
+    "observations",
+    "recommendations",
+    "questions",
+)
 
 
 def load_metrics(path_or_dict: Any) -> dict[str, Any]:
@@ -177,18 +190,135 @@ def compare_many(
     return {"comparisons": comparisons, "ranked": ranked}
 
 
+def _resolve_timeout_s(timeout_s: float | None) -> float:
+    if timeout_s is not None:
+        try:
+            value = float(timeout_s)
+        except Exception:
+            value = DEFAULT_OLLAMA_TIMEOUT_S
+        if math.isfinite(value) and value > 0:
+            return value
+        return DEFAULT_OLLAMA_TIMEOUT_S
+
+    for env_name in ("OLLAMA_TIMEOUT_S", "OLLAMA_TIMEOUT"):
+        raw_value = os.environ.get(env_name)
+        if not raw_value:
+            continue
+        try:
+            value = float(raw_value)
+        except Exception:
+            continue
+        if math.isfinite(value) and value > 0:
+            return value
+    return DEFAULT_OLLAMA_TIMEOUT_S
+
+
+def _build_model_candidates(model_name: str) -> list[str]:
+    name = model_name.strip()
+    if not name:
+        return [DEFAULT_OLLAMA_MODEL]
+
+    candidates: list[str] = []
+
+    def _add(candidate: str) -> None:
+        text = candidate.strip()
+        if text and text not in candidates:
+            candidates.append(text)
+
+    _add(name)
+    if ":" not in name and "/" not in name:
+        _add(f"{name}:latest")
+
+    lower_name = name.lower()
+    if lower_name == "ministral":
+        _add("ministral:latest")
+        _add("ministral-3:latest")
+    elif lower_name.startswith("ministral:"):
+        _add("ministral")
+        _add("ministral-3:latest")
+    elif lower_name.startswith("ministral-3"):
+        _add("ministral:latest")
+        _add("ministral")
+
+    return candidates
+
+
+def _is_model_not_found_error(error_text: str) -> bool:
+    text = str(error_text).lower()
+    if "model" not in text:
+        return False
+    return (
+        "not found" in text
+        or "pull" in text
+        or "does not exist" in text
+    )
+
+
+def _parse_ollama_content(content: Any) -> tuple[dict[str, Any], str]:
+    if isinstance(content, dict):
+        return content, "dict"
+    if not isinstance(content, str):
+        raise ValueError("Ollama response content is not a JSON object.")
+
+    text = content.strip()
+    if not text:
+        raise ValueError("Ollama response content is empty.")
+
+    candidates: list[tuple[str, str]] = [("raw", text)]
+    fenced_blocks = re.findall(r"```(?:json)?\s*(.*?)\s*```", text, flags=re.DOTALL | re.IGNORECASE)
+    for block in fenced_blocks:
+        snippet = block.strip()
+        if snippet:
+            candidates.append(("code_fence", snippet))
+
+    first_brace = text.find("{")
+    last_brace = text.rfind("}")
+    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+        candidates.append(("brace_slice", text[first_brace : last_brace + 1]))
+
+    for mode, candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except Exception:
+            continue
+        if isinstance(parsed, dict):
+            return parsed, mode
+
+    raise ValueError("Ollama response did not contain a JSON object.")
+
+
+def _normalize_insights(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(payload)
+    summary = normalized.get("summary")
+    if summary is None:
+        normalized["summary"] = ""
+    else:
+        normalized["summary"] = str(summary)
+
+    for key in _INSIGHT_LIST_KEYS:
+        value = normalized.get(key)
+        if value is None:
+            normalized[key] = []
+        elif isinstance(value, list):
+            normalized[key] = value
+        else:
+            normalized[key] = [value]
+    return normalized
+
+
 def ollama_chat(
     messages: list[dict[str, str]],
     host: str,
     model: str,
     temperature: float,
     max_tokens: int,
-    timeout_s: float = 20.0,
+    timeout_s: float = DEFAULT_OLLAMA_TIMEOUT_S,
 ) -> dict[str, Any]:
     payload = {
         "model": model,
         "messages": messages,
         "stream": False,
+        "format": "json",
         "options": {
             "temperature": temperature,
             "num_predict": max_tokens,
@@ -250,6 +380,7 @@ def review_with_llm(
     max_tokens: int = 800,
     focus: str | None = None,
     return_raw: bool = False,
+    timeout_s: float | None = None,
 ) -> dict[str, Any]:
     current_metrics = load_metrics(current)
     summary = compact_metrics_summary(current_metrics)
@@ -257,8 +388,11 @@ def review_with_llm(
     if baseline is not None:
         comparison_result = compare_and_score(current_metrics, baseline)
 
-    host = ollama_host or os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-    model_name = model or os.environ.get("OLLAMA_MODEL", "ministral-3:latest")
+    host = ollama_host or os.environ.get("OLLAMA_HOST", DEFAULT_OLLAMA_HOST)
+    model_name = model or os.environ.get("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
+    timeout_seconds = _resolve_timeout_s(timeout_s)
+    model_candidates = _build_model_candidates(model_name)
+
     backend = {
         "provider": "ollama",
         "host": host,
@@ -266,6 +400,8 @@ def review_with_llm(
         "status": "pending",
         "used_ollama": False,
         "error": None,
+        "attempted_models": [],
+        "request_timeout_s": timeout_seconds,
     }
 
     system_prompt = (
@@ -285,33 +421,51 @@ def review_with_llm(
     ]
 
     raw_response = None
-    try:
-        raw_response = ollama_chat(
-            messages=messages,
-            host=host,
-            model=model_name,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-        content = raw_response.get("message", {}).get("content", "")
-        parsed = json.loads(content)
-        backend["status"] = "ok"
-        backend["used_ollama"] = True
-        return {
-            "insights": parsed,
-            "comparison": comparison_result,
-            "raw_llm": content if return_raw else None,
-            "backend": backend,
-            "heuristic_fallback": False,
-        }
-    except Exception as exc:
-        backend["status"] = "fallback"
-        backend["error"] = str(exc)
-        fallback = _fallback_insights(summary, comparison_result)
-        return {
-            "insights": fallback,
-            "comparison": comparison_result,
-            "raw_llm": raw_response if return_raw else None,
-            "backend": backend,
-            "heuristic_fallback": True,
-        }
+    raw_content: Any = None
+    for idx, candidate in enumerate(model_candidates):
+        backend["attempted_models"].append(candidate)
+        try:
+            raw_response = ollama_chat(
+                messages=messages,
+                host=host,
+                model=candidate,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout_s=timeout_seconds,
+            )
+            raw_content = raw_response.get("message", {}).get("content", "")
+            parsed_content, parse_mode = _parse_ollama_content(raw_content)
+            parsed = _normalize_insights(parsed_content)
+            backend["status"] = "ok"
+            backend["used_ollama"] = True
+            backend["model"] = candidate
+            backend["parse_mode"] = parse_mode
+            backend["model_alias_used"] = candidate != model_name
+            return {
+                "insights": parsed,
+                "comparison": comparison_result,
+                "raw_llm": raw_content if return_raw else None,
+                "backend": backend,
+                "heuristic_fallback": False,
+            }
+        except Exception as exc:
+            backend["error"] = str(exc)
+            should_try_alias = (
+                idx + 1 < len(model_candidates)
+                and _is_model_not_found_error(str(exc))
+            )
+            if should_try_alias:
+                continue
+            break
+
+    backend["status"] = "fallback"
+    fallback = _fallback_insights(summary, comparison_result)
+    return {
+        "insights": fallback,
+        "comparison": comparison_result,
+        "raw_llm": (raw_content if raw_content is not None else raw_response)
+        if return_raw
+        else None,
+        "backend": backend,
+        "heuristic_fallback": True,
+    }

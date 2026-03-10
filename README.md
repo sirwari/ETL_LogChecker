@@ -63,13 +63,17 @@ Key metrics surfaced in JSON and the HTML report include:
 - `trace.events_per_s`
 - `trace.process_count`
 - `trace.user_process_count`
+- `trace.user_process_ratio_pct`
 - `io.slow_time_s`
 - `io.slow_time_pct`
 - `io.slow_ops`
 - `io.slow_ops_pct`
+- `io.slow_ops_per_s`
+- `io.slow_time_avg_ms`
 - `io.avg_bytes_per_op`
 - `launch_latency.stats.avg_s`
 - `launch_latency.stats.p95_s`
+- `launch_latency.stats.coverage_pct`
 - `boot.boot_duration_s`
 - `boot.boot_order_count`
 
@@ -192,13 +196,14 @@ Available tools:
 ## Ollama Notes
 Environment variables:
 - `OLLAMA_HOST` (default: `http://localhost:11434`)
-- `OLLAMA_MODEL` (default: `ministral-3:latest`)
+- `OLLAMA_MODEL` (default: `ministral:latest`)
+- `OLLAMA_TIMEOUT_S` (default: `90`)
 
 Typical setup:
 
 ```bash
 ollama serve
-ollama pull ministral-3:latest
+ollama pull ministral:latest
 ```
 
 If Ollama is unavailable, Agentic Diagnose falls back to the built-in heuristic

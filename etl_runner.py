@@ -84,6 +84,7 @@ def review_metrics(
     max_tokens: int = 800,
     focus: str | None = None,
     return_raw: bool = False,
+    timeout_s: float | None = None,
 ) -> dict[str, Any]:
     return review_with_llm(
         current=current,
@@ -94,4 +95,5 @@ def review_metrics(
         max_tokens=max_tokens,
         focus=focus,
         return_raw=return_raw,
+        timeout_s=timeout_s,
     )
