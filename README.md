@@ -64,6 +64,7 @@ Key metrics surfaced in JSON and the HTML report include:
 - `trace.process_count`
 - `trace.user_process_count`
 - `trace.user_process_ratio_pct`
+- `trace.events_per_user_process`
 - `io.slow_time_s`
 - `io.slow_time_pct`
 - `io.slow_ops`
@@ -71,6 +72,7 @@ Key metrics surfaced in JSON and the HTML report include:
 - `io.slow_ops_per_s`
 - `io.slow_time_avg_ms`
 - `io.avg_bytes_per_op`
+- `io.bytes_per_user_process`
 - `launch_latency.stats.avg_s`
 - `launch_latency.stats.p95_s`
 - `launch_latency.stats.coverage_pct`
@@ -208,6 +210,8 @@ ollama pull ministral:latest
 
 If Ollama is unavailable, Agentic Diagnose falls back to the built-in heuristic
 summary and reports that status in the GUI and returned JSON.
+If `POST /api/chat` is unavailable on your local endpoint, the tool retries
+legacy-compatible endpoints automatically.
 
 ## Dev Proof Screenshots
 ```bash

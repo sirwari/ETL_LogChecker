@@ -12,6 +12,7 @@ def test_render_report_shows_added_metrics():
             "event_count": 120,
             "events_per_s": 10.0,
             "events_per_process": 15.0,
+            "events_per_user_process": 20.0,
             "process_count": 8,
             "user_process_count": 6,
             "user_process_ratio_pct": 0.75,
@@ -26,6 +27,7 @@ def test_render_report_shows_added_metrics():
             "total_ops": 50,
             "total_bytes": 4096,
             "avg_bytes_per_op": 81.92,
+            "bytes_per_user_process": 682.66,
             "throughput_bytes_per_s": 341.33,
             "slow_ops": 5,
             "slow_ops_pct": 0.1,
@@ -53,6 +55,7 @@ def test_render_report_shows_added_metrics():
 
     assert "Events / s" in html
     assert "Events / process" in html
+    assert "Events / user process" in html
     assert "Processes" in html
     assert "User processes" in html
     assert "User process ratio" in html
@@ -64,6 +67,7 @@ def test_render_report_shows_added_metrics():
     assert "Launch avg:" in html
     assert "Launch coverage:" in html
     assert "Avg I/O bytes / op:" in html
+    assert "I/O bytes / user process:" in html
     assert "Boot order entries: 2" in html
 
 
@@ -77,6 +81,8 @@ def test_format_review_diagnose_includes_backend_details():
             "status": "fallback",
             "error": "connection refused",
             "attempted_models": ["ministral:latest", "ministral-3:latest"],
+            "endpoint": "/api/generate",
+            "attempted_endpoints": ["/api/chat", "/api/generate"],
             "request_timeout_s": 90.0,
         },
         "insights": {
@@ -93,6 +99,8 @@ def test_format_review_diagnose_includes_backend_details():
 
     assert "Agentic Diagnose (Ollama)" in text
     assert "Status: Heuristic fallback" in text
+    assert "Endpoint: /api/generate" in text
+    assert "Attempted endpoints: /api/chat, /api/generate" in text
     assert "Attempted models: ministral:latest, ministral-3:latest" in text
     assert "Timeout: 90.0s" in text
     assert "Fallback reason: connection refused" in text
