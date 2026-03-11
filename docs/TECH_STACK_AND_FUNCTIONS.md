@@ -116,7 +116,7 @@
 - GUI tabs for Summary, Metrics JSON, Baseline JSON, Comparison, and Report HTML
 
 ## External Integration Points
-- Ollama REST API: `POST /api/chat`
+- Ollama REST API: `POST /api/chat` (with automatic fallback to `/api/generate` and `/v1/chat/completions` when needed)
 - MCP stdio transport
 - Windows `tracerpt.exe`
 

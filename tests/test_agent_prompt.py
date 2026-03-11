@@ -1,4 +1,5 @@
 import json
+import urllib.error
 
 import etl_agent
 
@@ -150,3 +151,57 @@ def test_review_parses_code_fenced_json(monkeypatch):
     assert result["heuristic_fallback"] is False
     assert result["backend"]["parse_mode"] == "code_fence"
     assert result["insights"]["summary"] == "Parsed from fence."
+
+
+def test_review_retries_legacy_endpoint_when_api_chat_404(monkeypatch):
+    class _Response:
+        def __init__(self, body: dict[str, object]) -> None:
+            self._payload = json.dumps(body).encode("utf-8")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self, *args, **kwargs):
+            return self._payload
+
+    seen_urls: list[str] = []
+
+    def _urlopen(request, timeout=0):
+        seen_urls.append(request.full_url)
+        if request.full_url.endswith("/api/chat"):
+            raise urllib.error.HTTPError(
+                request.full_url,
+                404,
+                "Not Found",
+                hdrs=None,
+                fp=None,
+            )
+        if request.full_url.endswith("/api/generate"):
+            return _Response(
+                {
+                    "response": json.dumps(
+                        {
+                            "summary": "Legacy endpoint worked.",
+                            "regressions": [],
+                            "improvements": [],
+                            "observations": [],
+                            "recommendations": [],
+                            "questions": [],
+                        }
+                    )
+                }
+            )
+        raise AssertionError(f"Unexpected URL {request.full_url}")
+
+    monkeypatch.setattr(etl_agent.urllib.request, "urlopen", _urlopen)
+    result = etl_agent.review_with_llm(_sample_metrics(), model="ministral:latest")
+
+    assert result["heuristic_fallback"] is False
+    assert result["insights"]["summary"] == "Legacy endpoint worked."
+    assert result["backend"]["endpoint"] == "/api/generate"
+    assert "/api/chat" in result["backend"]["attempted_endpoints"]
+    assert "/api/generate" in result["backend"]["attempted_endpoints"]
+    assert seen_urls[0].endswith("/api/chat")

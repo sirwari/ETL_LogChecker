@@ -1779,6 +1779,11 @@ class ETLUXAnalyzer:
                 "events_per_process": _safe_div(float(self.event_count), float(process_count))
                 if process_count > 0
                 else None,
+                "events_per_user_process": _safe_div(
+                    float(self.event_count), float(user_process_count)
+                )
+                if user_process_count > 0
+                else None,
                 "process_count": process_count,
                 "user_process_count": user_process_count,
                 "user_process_ratio_pct": _safe_div(
@@ -1800,6 +1805,11 @@ class ETLUXAnalyzer:
                 )
                 if self.total_io_ops > 0
                 else 0.0,
+                "bytes_per_user_process": _safe_div(
+                    float(self.total_io_bytes), float(user_process_count)
+                )
+                if user_process_count > 0
+                else None,
                 "throughput_bytes_per_s": _safe_div(
                     float(self.total_io_bytes), trace_duration
                 )
@@ -2286,10 +2296,12 @@ def _render_report(
     event_count = trace.get("event_count")
     events_per_s = trace.get("events_per_s")
     events_per_process = trace.get("events_per_process")
+    events_per_user_process = trace.get("events_per_user_process")
     process_count = trace.get("process_count")
     user_process_count = trace.get("user_process_count")
     user_process_ratio_pct = float(trace.get("user_process_ratio_pct", 0.0) or 0.0) * 100.0
     avg_bytes_per_op = io.get("avg_bytes_per_op")
+    bytes_per_user_process = io.get("bytes_per_user_process")
     io_throughput = io.get("throughput_bytes_per_s")
     slow_ops_per_s = io.get("slow_ops_per_s")
     slow_time_avg_ms = io.get("slow_time_avg_ms")
@@ -2649,6 +2661,7 @@ def _render_report(
       <div class="card"><h3>Event count</h3><div class="value">{int(event_count) if event_count is not None else "n/a"}</div></div>
       <div class="card"><h3>Events / s</h3><div class="value">{f"{events_per_s:.2f}" if events_per_s is not None else "n/a"}</div></div>
       <div class="card"><h3>Events / process</h3><div class="value">{f"{float(events_per_process):.2f}" if events_per_process is not None else "n/a"}</div></div>
+      <div class="card"><h3>Events / user process</h3><div class="value">{f"{float(events_per_user_process):.2f}" if events_per_user_process is not None else "n/a"}</div></div>
       <div class="card"><h3>Processes</h3><div class="value">{int(process_count) if process_count is not None else "n/a"}</div></div>
       <div class="card"><h3>User processes</h3><div class="value">{int(user_process_count) if user_process_count is not None else "n/a"}</div></div>
       <div class="card"><h3>User process ratio</h3><div class="value">{user_process_ratio_pct:.2f}%</div></div>
@@ -2684,6 +2697,7 @@ def _render_report(
         <span><strong>Tracked processes:</strong> {int(process_count) if process_count is not None else "n/a"}</span>
         <span><strong>User processes:</strong> {int(user_process_count) if user_process_count is not None else "n/a"}</span>
         <span><strong>Avg I/O bytes / op:</strong> {_format_bytes(avg_bytes_per_op)}</span>
+        <span><strong>I/O bytes / user process:</strong> {_format_bytes(bytes_per_user_process)}</span>
         <span><strong>I/O throughput:</strong> {_format_bytes(io_throughput) + "/s" if io_throughput is not None else "n/a"}</span>
       </div>
       {_render_bar_chart(launch_top, "startup_latency_s", "image", "s")}
@@ -3126,6 +3140,12 @@ def _build_analysis_summary(
             if trace.get("events_per_process") is not None
             else "n/a"
         ),
+        "Events / user process: "
+        + (
+            f"{float(trace.get('events_per_user_process')):.2f}"
+            if trace.get("events_per_user_process") is not None
+            else "n/a"
+        ),
         "Processes: "
         + (
             f"{int(trace.get('process_count'))} total / "
@@ -3140,6 +3160,12 @@ def _build_analysis_summary(
         + (
             f"{_format_bytes(float(io.get('throughput_bytes_per_s')))} / s"
             if io.get("throughput_bytes_per_s") is not None
+            else "n/a"
+        ),
+        "I/O bytes / user process: "
+        + (
+            _format_bytes(float(io.get("bytes_per_user_process")))
+            if io.get("bytes_per_user_process") is not None
             else "n/a"
         ),
         f"Slow I/O %: {(float(io.get('slow_time_pct', 0.0) or 0.0) * 100.0):.2f}%",
@@ -3241,6 +3267,15 @@ def _format_review_diagnose(result: dict[str, Any]) -> str:
         f"Host: {backend.get('host') or 'n/a'}",
         f"Model: {backend.get('model') or 'n/a'}",
     ]
+    endpoint = backend.get("endpoint")
+    if endpoint:
+        lines.append(f"Endpoint: {endpoint}")
+    attempted_endpoints = backend.get("attempted_endpoints")
+    if isinstance(attempted_endpoints, list) and attempted_endpoints:
+        lines.append(
+            "Attempted endpoints: "
+            + ", ".join(str(item) for item in attempted_endpoints)
+        )
     attempted_models = backend.get("attempted_models")
     if isinstance(attempted_models, list) and attempted_models:
         lines.append(

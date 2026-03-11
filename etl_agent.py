@@ -4,6 +4,7 @@ import json
 import math
 import os
 import re
+import urllib.error
 import urllib.request
 from typing import Any, Iterable
 
@@ -45,6 +46,12 @@ _INSIGHT_LIST_KEYS = (
     "recommendations",
     "questions",
 )
+
+
+class OllamaRequestError(RuntimeError):
+    def __init__(self, message: str, attempted_endpoints: list[str]) -> None:
+        super().__init__(message)
+        self.attempted_endpoints = attempted_endpoints
 
 
 def load_metrics(path_or_dict: Any) -> dict[str, Any]:
@@ -306,15 +313,33 @@ def _normalize_insights(payload: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
-def ollama_chat(
+def _flatten_messages_for_prompt(messages: list[dict[str, str]]) -> tuple[str, str]:
+    system_parts: list[str] = []
+    prompt_parts: list[str] = []
+    for message in messages:
+        role = str(message.get("role") or "").strip().lower()
+        content = str(message.get("content") or "").strip()
+        if not content:
+            continue
+        if role == "system":
+            system_parts.append(content)
+            continue
+        if role in ("user", "assistant"):
+            prompt_parts.append(content)
+        elif role:
+            prompt_parts.append(f"[{role}] {content}")
+        else:
+            prompt_parts.append(content)
+    return "\n\n".join(system_parts), "\n\n".join(prompt_parts)
+
+
+def _build_ollama_endpoint_requests(
     messages: list[dict[str, str]],
-    host: str,
     model: str,
     temperature: float,
     max_tokens: int,
-    timeout_s: float = DEFAULT_OLLAMA_TIMEOUT_S,
-) -> dict[str, Any]:
-    payload = {
+) -> list[tuple[str, dict[str, Any]]]:
+    chat_payload = {
         "model": model,
         "messages": messages,
         "stream": False,
@@ -324,16 +349,115 @@ def ollama_chat(
             "num_predict": max_tokens,
         },
     }
-    data = json.dumps(payload).encode("utf-8")
-    url = host.rstrip("/") + "/api/chat"
-    request = urllib.request.Request(
-        url,
-        data=data,
-        headers={"Content-Type": "application/json"},
-        method="POST",
+
+    system_text, prompt_text = _flatten_messages_for_prompt(messages)
+    if not prompt_text:
+        prompt_text = "Return strict JSON analysis."
+    generate_payload: dict[str, Any] = {
+        "model": model,
+        "prompt": prompt_text,
+        "stream": False,
+        "format": "json",
+        "options": {
+            "temperature": temperature,
+            "num_predict": max_tokens,
+        },
+    }
+    if system_text:
+        generate_payload["system"] = system_text
+
+    openai_payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+
+    return [
+        ("/api/chat", chat_payload),
+        ("/api/generate", generate_payload),
+        ("/v1/chat/completions", openai_payload),
+    ]
+
+
+def _is_endpoint_retryable_error(exc: Exception) -> bool:
+    if isinstance(exc, urllib.error.HTTPError):
+        return exc.code in (400, 404, 405, 415, 422, 500, 501)
+    return isinstance(exc, ValueError)
+
+
+def _extract_llm_content(raw_response: dict[str, Any]) -> tuple[Any, str]:
+    message = raw_response.get("message")
+    if isinstance(message, dict):
+        if "content" in message:
+            return message.get("content"), "chat"
+
+    if "response" in raw_response:
+        return raw_response.get("response"), "generate"
+
+    choices = raw_response.get("choices")
+    if isinstance(choices, list) and choices:
+        first = choices[0]
+        if isinstance(first, dict):
+            message = first.get("message")
+            if isinstance(message, dict) and "content" in message:
+                return message.get("content"), "openai_chat"
+            if "text" in first:
+                return first.get("text"), "openai_text"
+
+    raise ValueError("Ollama response did not expose a supported content field.")
+
+
+def ollama_chat(
+    messages: list[dict[str, str]],
+    host: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    timeout_s: float = DEFAULT_OLLAMA_TIMEOUT_S,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    endpoint_requests = _build_ollama_endpoint_requests(
+        messages=messages,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
     )
-    with urllib.request.urlopen(request, timeout=timeout_s) as response:
-        return json.load(response)
+    attempted_endpoints: list[str] = []
+    errors: list[str] = []
+
+    for idx, (path, payload) in enumerate(endpoint_requests):
+        attempted_endpoints.append(path)
+        data = json.dumps(payload).encode("utf-8")
+        url = host.rstrip("/") + path
+        request = urllib.request.Request(
+            url,
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout_s) as response:
+                parsed = json.load(response)
+            if not isinstance(parsed, dict):
+                raise ValueError("Ollama response body is not a JSON object.")
+            return parsed, {
+                "endpoint": path,
+                "attempted_endpoints": attempted_endpoints[:],
+            }
+        except Exception as exc:
+            errors.append(f"{path}: {exc}")
+            should_try_next = (
+                idx + 1 < len(endpoint_requests)
+                and _is_endpoint_retryable_error(exc)
+            )
+            if should_try_next:
+                continue
+            raise OllamaRequestError("; ".join(errors), attempted_endpoints[:]) from exc
+
+    raise OllamaRequestError(
+        "; ".join(errors) if errors else "No Ollama endpoint attempts were made.",
+        attempted_endpoints[:],
+    )
 
 
 def _fallback_insights(
@@ -401,6 +525,7 @@ def review_with_llm(
         "used_ollama": False,
         "error": None,
         "attempted_models": [],
+        "attempted_endpoints": [],
         "request_timeout_s": timeout_seconds,
     }
 
@@ -425,7 +550,7 @@ def review_with_llm(
     for idx, candidate in enumerate(model_candidates):
         backend["attempted_models"].append(candidate)
         try:
-            raw_response = ollama_chat(
+            chat_result = ollama_chat(
                 messages=messages,
                 host=host,
                 model=candidate,
@@ -433,13 +558,33 @@ def review_with_llm(
                 max_tokens=max_tokens,
                 timeout_s=timeout_seconds,
             )
-            raw_content = raw_response.get("message", {}).get("content", "")
+            chat_meta: dict[str, Any] = {}
+            if (
+                isinstance(chat_result, tuple)
+                and len(chat_result) == 2
+                and isinstance(chat_result[1], dict)
+            ):
+                raw_response, chat_meta = chat_result
+            else:
+                raw_response = chat_result  # backward compatibility for monkeypatched tests
+
+            attempted_endpoints = chat_meta.get("attempted_endpoints", [])
+            if isinstance(attempted_endpoints, list):
+                for endpoint in attempted_endpoints:
+                    if endpoint not in backend["attempted_endpoints"]:
+                        backend["attempted_endpoints"].append(endpoint)
+            endpoint = chat_meta.get("endpoint")
+            if endpoint:
+                backend["endpoint"] = endpoint
+
+            raw_content, response_source = _extract_llm_content(raw_response)
             parsed_content, parse_mode = _parse_ollama_content(raw_content)
             parsed = _normalize_insights(parsed_content)
             backend["status"] = "ok"
             backend["used_ollama"] = True
             backend["model"] = candidate
             backend["parse_mode"] = parse_mode
+            backend["response_source"] = response_source
             backend["model_alias_used"] = candidate != model_name
             return {
                 "insights": parsed,
@@ -449,6 +594,10 @@ def review_with_llm(
                 "heuristic_fallback": False,
             }
         except Exception as exc:
+            if isinstance(exc, OllamaRequestError):
+                for endpoint in exc.attempted_endpoints:
+                    if endpoint not in backend["attempted_endpoints"]:
+                        backend["attempted_endpoints"].append(endpoint)
             backend["error"] = str(exc)
             should_try_alias = (
                 idx + 1 < len(model_candidates)
