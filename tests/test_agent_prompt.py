@@ -205,3 +205,46 @@ def test_review_retries_legacy_endpoint_when_api_chat_404(monkeypatch):
     assert "/api/chat" in result["backend"]["attempted_endpoints"]
     assert "/api/generate" in result["backend"]["attempted_endpoints"]
     assert seen_urls[0].endswith("/api/chat")
+
+
+def test_review_uses_cli_fallback_when_http_endpoints_fail(monkeypatch):
+    def _http_fail(**kwargs):
+        raise etl_agent.OllamaRequestError(
+            "/api/chat: HTTP Error 404: Not Found; /api/generate: HTTP Error 404: Not Found",
+            ["/api/chat", "/api/generate"],
+        )
+
+    def _cli_ok(**kwargs):
+        return (
+            {
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "summary": "CLI fallback succeeded.",
+                            "regressions": [],
+                            "improvements": [],
+                            "observations": [],
+                            "recommendations": [],
+                            "questions": [],
+                        }
+                    )
+                }
+            },
+            {
+                "endpoint": "ollama_cli",
+                "attempted_endpoints": ["ollama_cli"],
+                "transport": "cli",
+            },
+        )
+
+    monkeypatch.setattr(etl_agent, "ollama_chat", _http_fail)
+    monkeypatch.setattr(etl_agent, "_run_ollama_cli", _cli_ok)
+
+    result = etl_agent.review_with_llm(_sample_metrics(), model="ministral:latest")
+
+    assert result["heuristic_fallback"] is False
+    assert result["backend"]["transport"] == "cli"
+    assert result["backend"]["endpoint"] == "ollama_cli"
+    assert result["backend"]["cli_fallback_used"] is True
+    assert "/api/chat" in result["backend"]["attempted_endpoints"]
+    assert "ollama_cli" in result["backend"]["attempted_endpoints"]

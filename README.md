@@ -70,7 +70,9 @@ Key metrics surfaced in JSON and the HTML report include:
 - `io.slow_ops`
 - `io.slow_ops_pct`
 - `io.slow_ops_per_s`
+- `io.slow_ops_per_user_process`
 - `io.slow_time_avg_ms`
+- `io.slow_time_per_user_process_s`
 - `io.avg_bytes_per_op`
 - `io.bytes_per_user_process`
 - `launch_latency.stats.avg_s`
@@ -200,6 +202,7 @@ Environment variables:
 - `OLLAMA_HOST` (default: `http://localhost:11434`)
 - `OLLAMA_MODEL` (default: `ministral:latest`)
 - `OLLAMA_TIMEOUT_S` (default: `90`)
+- `OLLAMA_USE_CLI_FALLBACK` (default: enabled)
 
 Typical setup:
 
@@ -212,6 +215,8 @@ If Ollama is unavailable, Agentic Diagnose falls back to the built-in heuristic
 summary and reports that status in the GUI and returned JSON.
 If `POST /api/chat` is unavailable on your local endpoint, the tool retries
 legacy-compatible endpoints automatically.
+If HTTP endpoints fail completely, the tool can use local `ollama` CLI fallback
+before switching to the heuristic summary.
 
 ## Dev Proof Screenshots
 ```bash

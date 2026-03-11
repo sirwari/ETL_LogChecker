@@ -72,6 +72,7 @@ async def review_metrics(
     focus: str | None = None,
     return_raw: bool = False,
     timeout_s: float | None = None,
+    use_cli_fallback: bool | None = None,
 ) -> dict[str, Any]:
     return _review_metrics(
         current=current,
@@ -83,6 +84,7 @@ async def review_metrics(
         focus=focus,
         return_raw=return_raw,
         timeout_s=timeout_s,
+        use_cli_fallback=use_cli_fallback,
     )
 
 

@@ -1819,10 +1819,20 @@ class ETLUXAnalyzer:
                 "slow_ops_pct": _safe_div(float(self.slow_io_ops), float(self.total_io_ops))
                 if self.total_io_ops > 0
                 else 0.0,
+                "slow_ops_per_user_process": _safe_div(
+                    float(self.slow_io_ops), float(user_process_count)
+                )
+                if user_process_count > 0
+                else None,
                 "slow_time_s": self.total_slow_io_time_s,
                 "slow_time_pct": _safe_div(self.total_slow_io_time_s, trace_duration)
                 if trace_duration > 0
                 else 0.0,
+                "slow_time_per_user_process_s": _safe_div(
+                    self.total_slow_io_time_s, float(user_process_count)
+                )
+                if user_process_count > 0
+                else None,
                 "slow_ops_per_s": _safe_div(float(self.slow_io_ops), trace_duration)
                 if trace_duration > 0
                 else 0.0,
@@ -2304,7 +2314,9 @@ def _render_report(
     bytes_per_user_process = io.get("bytes_per_user_process")
     io_throughput = io.get("throughput_bytes_per_s")
     slow_ops_per_s = io.get("slow_ops_per_s")
+    slow_ops_per_user_process = io.get("slow_ops_per_user_process")
     slow_time_avg_ms = io.get("slow_time_avg_ms")
+    slow_time_per_user_process_s = io.get("slow_time_per_user_process_s")
     launch_p95 = launch_stats.get("p95_s")
     launch_avg = launch_stats.get("avg_s")
     launch_coverage_pct = float(launch_stats.get("coverage_pct", 0.0) or 0.0) * 100.0
@@ -2669,7 +2681,9 @@ def _render_report(
       <div class="card"><h3>Slow I/O %</h3><div class="value">{slow_pct:.2f}%</div></div>
       <div class="card"><h3>Slow ops %</h3><div class="value">{slow_ops_pct:.2f}%</div></div>
       <div class="card"><h3>Slow ops / s</h3><div class="value">{f"{float(slow_ops_per_s):.2f}" if slow_ops_per_s is not None else "n/a"}</div></div>
+      <div class="card"><h3>Slow ops / user process</h3><div class="value">{f"{float(slow_ops_per_user_process):.2f}" if slow_ops_per_user_process is not None else "n/a"}</div></div>
       <div class="card"><h3>Avg slow I/O (ms)</h3><div class="value">{f"{float(slow_time_avg_ms):.2f}" if slow_time_avg_ms is not None else "n/a"}</div></div>
+      <div class="card"><h3>Slow I/O s / user process</h3><div class="value">{_format_seconds(slow_time_per_user_process_s)}</div></div>
       <div class="card"><h3>I/O p95</h3><div class="value">{_format_seconds(io_percentiles.get("p95_s"))}</div></div>
       <div class="card"><h3>I/O p99</h3><div class="value">{_format_seconds(io_percentiles.get("p99_s"))}</div></div>
       <div class="card"><h3>I/O throughput</h3><div class="value">{_format_bytes(io_throughput) + "/s" if io_throughput is not None else "n/a"}</div></div>
@@ -3176,6 +3190,18 @@ def _build_analysis_summary(
             if io.get("slow_ops_per_s") is not None
             else "n/a"
         ),
+        "Slow ops / user process: "
+        + (
+            f"{float(io.get('slow_ops_per_user_process')):.2f}"
+            if io.get("slow_ops_per_user_process") is not None
+            else "n/a"
+        ),
+        "Slow I/O s / user process: "
+        + (
+            _format_seconds(float(io.get("slow_time_per_user_process_s")))
+            if io.get("slow_time_per_user_process_s") is not None
+            else "n/a"
+        ),
         "Avg slow I/O latency: "
         + (
             f"{float(io.get('slow_time_avg_ms')):.2f} ms"
@@ -3267,6 +3293,9 @@ def _format_review_diagnose(result: dict[str, Any]) -> str:
         f"Host: {backend.get('host') or 'n/a'}",
         f"Model: {backend.get('model') or 'n/a'}",
     ]
+    transport = backend.get("transport")
+    if transport:
+        lines.append(f"Transport: {transport}")
     endpoint = backend.get("endpoint")
     if endpoint:
         lines.append(f"Endpoint: {endpoint}")
@@ -3289,6 +3318,13 @@ def _format_review_diagnose(result: dict[str, Any]) -> str:
         lines.append(f"Response parse mode: {parse_mode}")
     if backend.get("model_alias_used"):
         lines.append("Model alias fallback: yes")
+    if backend.get("cli_fallback_enabled"):
+        lines.append("CLI fallback enabled: yes")
+    if backend.get("cli_fallback_used"):
+        lines.append("CLI fallback used: yes")
+    cli_error = backend.get("cli_error")
+    if cli_error:
+        lines.append(f"CLI fallback error: {cli_error}")
 
     error = backend.get("error")
     if error:
@@ -3381,6 +3417,10 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
             )
             self.review_temperature_var = tk.DoubleVar(value=0.2)
             self.review_max_tokens_var = tk.IntVar(value=800)
+            self.review_use_cli_fallback_var = tk.BooleanVar(
+                value=os.environ.get("OLLAMA_USE_CLI_FALLBACK", "1").strip().lower()
+                not in {"0", "false", "no", "off", ""}
+            )
             self._analysis_output_controls: list[tuple[Any, Any]] = []
             self._action_buttons: list[Any] = []
             self._busy = False
@@ -4120,12 +4160,18 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                 textvariable=self.review_max_tokens_var,
             ).grid(row=1, column=3, sticky="ew")
 
+            ttk_module.Checkbutton(
+                controls,
+                text="Use local ollama CLI fallback if HTTP endpoints fail",
+                variable=self.review_use_cli_fallback_var,
+            ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(8, 0))
+
             review_button = ttk_module.Button(
                 controls,
                 text="Run Agentic Diagnose",
                 command=self._run_review,
             )
-            review_button.grid(row=4, column=0, columnspan=3, sticky="w", pady=(8, 0))
+            review_button.grid(row=5, column=0, columnspan=3, sticky="w", pady=(8, 0))
             self._register_action_button(review_button)
 
             output_frame = ttk_module.Frame(parent, padding=(0, 12, 0, 0))
@@ -4494,6 +4540,7 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                 temperature = float(self.review_temperature_var.get())
                 max_tokens = int(self.review_max_tokens_var.get())
                 focus = self.review_focus_var.get().strip() or None
+                use_cli_fallback = bool(self.review_use_cli_fallback_var.get())
             except Exception as exc:
                 self.status_var.set("Agentic diagnose failed.")
                 messagebox.showerror("Agentic diagnose failed", str(exc))
@@ -4516,6 +4563,7 @@ def launch_standalone_gui(initial_etl_path: str | None = None) -> int:
                     max_tokens=max_tokens,
                     focus=focus,
                     return_raw=False,
+                    use_cli_fallback=use_cli_fallback,
                 )
 
             self._start_background_task(

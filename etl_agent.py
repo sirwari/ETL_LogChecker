@@ -4,6 +4,7 @@ import json
 import math
 import os
 import re
+import subprocess
 import urllib.error
 import urllib.request
 from typing import Any, Iterable
@@ -39,6 +40,7 @@ METRIC_LABELS = {
 DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 DEFAULT_OLLAMA_MODEL = "ministral:latest"
 DEFAULT_OLLAMA_TIMEOUT_S = 90.0
+DEFAULT_OLLAMA_USE_CLI_FALLBACK = True
 _INSIGHT_LIST_KEYS = (
     "regressions",
     "improvements",
@@ -52,6 +54,10 @@ class OllamaRequestError(RuntimeError):
     def __init__(self, message: str, attempted_endpoints: list[str]) -> None:
         super().__init__(message)
         self.attempted_endpoints = attempted_endpoints
+
+
+class OllamaCliError(RuntimeError):
+    pass
 
 
 def load_metrics(path_or_dict: Any) -> dict[str, Any]:
@@ -218,6 +224,13 @@ def _resolve_timeout_s(timeout_s: float | None) -> float:
         if math.isfinite(value) and value > 0:
             return value
     return DEFAULT_OLLAMA_TIMEOUT_S
+
+
+def _resolve_bool_env(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {"0", "false", "no", "off", ""}
 
 
 def _build_model_candidates(model_name: str) -> list[str]:
@@ -408,6 +421,68 @@ def _extract_llm_content(raw_response: dict[str, Any]) -> tuple[Any, str]:
     raise ValueError("Ollama response did not expose a supported content field.")
 
 
+def _should_try_cli_after_http_error(exc: Exception) -> bool:
+    if isinstance(exc, OllamaRequestError):
+        return True
+    if isinstance(exc, urllib.error.URLError):
+        return True
+    return isinstance(exc, TimeoutError)
+
+
+def _build_cli_prompt(messages: list[dict[str, str]]) -> str:
+    system_text, prompt_text = _flatten_messages_for_prompt(messages)
+    parts = []
+    if system_text:
+        parts.append(system_text)
+    if prompt_text:
+        parts.append(prompt_text)
+    if not parts:
+        parts.append("Provide a strict JSON response.")
+    return "\n\n".join(parts)
+
+
+def _run_ollama_cli(
+    messages: list[dict[str, str]],
+    host: str,
+    model: str,
+    timeout_s: float,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    prompt = _build_cli_prompt(messages)
+    command = ["ollama", "run", model, prompt]
+    env = os.environ.copy()
+    if host:
+        env["OLLAMA_HOST"] = host
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=timeout_s,
+            check=False,
+            env=env,
+        )
+    except FileNotFoundError as exc:
+        raise OllamaCliError("ollama CLI not found on PATH.") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise OllamaCliError(f"ollama CLI timed out after {timeout_s:.1f}s.") from exc
+    except Exception as exc:
+        raise OllamaCliError(f"ollama CLI failed to start: {exc}") from exc
+
+    stdout = (result.stdout or "").strip()
+    stderr = (result.stderr or "").strip()
+    if result.returncode != 0:
+        details = stderr or stdout or f"exit code {result.returncode}"
+        raise OllamaCliError(f"ollama CLI failed: {details}")
+    if not stdout:
+        raise OllamaCliError("ollama CLI returned an empty response.")
+
+    return {"message": {"content": stdout}}, {
+        "endpoint": "ollama_cli",
+        "attempted_endpoints": ["ollama_cli"],
+        "transport": "cli",
+    }
+
+
 def ollama_chat(
     messages: list[dict[str, str]],
     host: str,
@@ -505,6 +580,7 @@ def review_with_llm(
     focus: str | None = None,
     return_raw: bool = False,
     timeout_s: float | None = None,
+    use_cli_fallback: bool | None = None,
 ) -> dict[str, Any]:
     current_metrics = load_metrics(current)
     summary = compact_metrics_summary(current_metrics)
@@ -516,6 +592,11 @@ def review_with_llm(
     model_name = model or os.environ.get("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
     timeout_seconds = _resolve_timeout_s(timeout_s)
     model_candidates = _build_model_candidates(model_name)
+    cli_fallback_enabled = (
+        bool(use_cli_fallback)
+        if use_cli_fallback is not None
+        else _resolve_bool_env("OLLAMA_USE_CLI_FALLBACK", DEFAULT_OLLAMA_USE_CLI_FALLBACK)
+    )
 
     backend = {
         "provider": "ollama",
@@ -527,6 +608,9 @@ def review_with_llm(
         "attempted_models": [],
         "attempted_endpoints": [],
         "request_timeout_s": timeout_seconds,
+        "transport": "http",
+        "cli_fallback_enabled": cli_fallback_enabled,
+        "cli_attempted": False,
     }
 
     system_prompt = (
@@ -599,9 +683,50 @@ def review_with_llm(
                     if endpoint not in backend["attempted_endpoints"]:
                         backend["attempted_endpoints"].append(endpoint)
             backend["error"] = str(exc)
+
+            if cli_fallback_enabled and _should_try_cli_after_http_error(exc):
+                backend["cli_attempted"] = True
+                try:
+                    raw_response, cli_meta = _run_ollama_cli(
+                        messages=messages,
+                        host=host,
+                        model=candidate,
+                        timeout_s=timeout_seconds,
+                    )
+                    attempted_endpoints = cli_meta.get("attempted_endpoints", [])
+                    if isinstance(attempted_endpoints, list):
+                        for endpoint in attempted_endpoints:
+                            if endpoint not in backend["attempted_endpoints"]:
+                                backend["attempted_endpoints"].append(endpoint)
+                    endpoint = cli_meta.get("endpoint")
+                    if endpoint:
+                        backend["endpoint"] = endpoint
+                    backend["transport"] = str(cli_meta.get("transport") or "cli")
+
+                    raw_content, response_source = _extract_llm_content(raw_response)
+                    parsed_content, parse_mode = _parse_ollama_content(raw_content)
+                    parsed = _normalize_insights(parsed_content)
+                    backend["status"] = "ok"
+                    backend["used_ollama"] = True
+                    backend["model"] = candidate
+                    backend["parse_mode"] = parse_mode
+                    backend["response_source"] = response_source
+                    backend["cli_fallback_used"] = True
+                    backend["model_alias_used"] = candidate != model_name
+                    return {
+                        "insights": parsed,
+                        "comparison": comparison_result,
+                        "raw_llm": raw_content if return_raw else None,
+                        "backend": backend,
+                        "heuristic_fallback": False,
+                    }
+                except Exception as cli_exc:
+                    backend["cli_error"] = str(cli_exc)
+                    backend["error"] = f"{exc}; cli: {cli_exc}"
+
             should_try_alias = (
                 idx + 1 < len(model_candidates)
-                and _is_model_not_found_error(str(exc))
+                and _is_model_not_found_error(str(backend.get("error") or exc))
             )
             if should_try_alias:
                 continue

@@ -117,6 +117,7 @@
 
 ## External Integration Points
 - Ollama REST API: `POST /api/chat` (with automatic fallback to `/api/generate` and `/v1/chat/completions` when needed)
+- Local `ollama` CLI fallback (`ollama run`) when HTTP endpoints fail
 - MCP stdio transport
 - Windows `tracerpt.exe`
 
