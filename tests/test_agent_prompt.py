@@ -2,6 +2,7 @@ import json
 import urllib.error
 
 import etl_agent
+import pytest
 
 
 def _sample_metrics():
@@ -43,6 +44,11 @@ def _sample_metrics():
         "top_files": [{"file": "C:/file", "slow_time_s": 1.0}],
         "process_lifetimes": [{"image": "app.exe", "lifetime_s": 9.0}],
     }
+
+
+@pytest.fixture(autouse=True)
+def _stub_local_models(monkeypatch):
+    monkeypatch.setattr(etl_agent, "_list_local_ollama_models", lambda host, timeout_s: [])
 
 
 def test_compact_summary_shape():
@@ -348,3 +354,55 @@ def test_review_uses_cli_fallback_when_http_endpoints_fail(monkeypatch):
     assert result["backend"]["cli_fallback_used"] is True
     assert "/api/chat" in result["backend"]["attempted_endpoints"]
     assert "ollama_cli" in result["backend"]["attempted_endpoints"]
+
+
+def test_review_uses_discovered_local_model_after_cli_timeout(monkeypatch):
+    def _http_fail(**kwargs):
+        raise etl_agent.OllamaRequestError(
+            "/api/chat: HTTP Error 404: Not Found; /api/generate: HTTP Error 404: Not Found",
+            ["/api/chat", "/api/generate"],
+        )
+
+    def _cli_run(**kwargs):
+        model = kwargs["model"]
+        if model == "mistral:latest":
+            raise etl_agent.OllamaCliError("ollama CLI timed out after 90.0s.")
+        if model == "mistral":
+            return (
+                {
+                    "message": {
+                        "content": json.dumps(
+                            {
+                                "summary": "Recovered using locally available mistral.",
+                                "regressions": [],
+                                "improvements": [],
+                                "observations": [],
+                                "recommendations": [],
+                                "questions": [],
+                            }
+                        )
+                    }
+                },
+                {
+                    "endpoint": "ollama_cli",
+                    "attempted_endpoints": ["ollama_cli"],
+                    "transport": "cli",
+                },
+            )
+        raise etl_agent.OllamaCliError("ollama CLI failed: pull model manifest: file does not exist")
+
+    monkeypatch.setattr(
+        etl_agent,
+        "_list_local_ollama_models",
+        lambda host, timeout_s: ["mistral"],
+    )
+    monkeypatch.setattr(etl_agent, "ollama_chat", _http_fail)
+    monkeypatch.setattr(etl_agent, "_run_ollama_cli", _cli_run)
+
+    result = etl_agent.review_with_llm(_sample_metrics(), model="ministral:latest")
+
+    assert result["heuristic_fallback"] is False
+    assert result["backend"]["transport"] == "cli"
+    assert result["backend"]["model"] == "mistral"
+    assert result["backend"]["error"] is None
+    assert result["backend"]["cli_error"] is None

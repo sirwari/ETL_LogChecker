@@ -92,6 +92,89 @@ def _insights_have_signal(payload: dict[str, Any]) -> bool:
     return False
 
 
+def _parse_ollama_list(stdout: str) -> list[str]:
+    models: list[str] = []
+    for raw_line in stdout.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.lower().startswith("name"):
+            continue
+        name = line.split()[0].strip()
+        if name and name not in models:
+            models.append(name)
+    return models
+
+
+def _list_local_ollama_models(host: str, timeout_s: float) -> list[str]:
+    env = os.environ.copy()
+    if host:
+        env["OLLAMA_HOST"] = host
+    timeout = max(5.0, min(15.0, float(timeout_s)))
+    try:
+        result = subprocess.run(
+            ["ollama", "list"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+            env=env,
+        )
+    except Exception:
+        return []
+    stdout = _sanitize_terminal_text(result.stdout)
+    if not stdout:
+        return []
+    return _parse_ollama_list(stdout)
+
+
+def _candidate_available_locally(candidate: str, local_models: list[str]) -> bool:
+    normalized = candidate.strip().lower()
+    available = {item.strip().lower() for item in local_models if str(item).strip()}
+    if normalized in available:
+        return True
+    if normalized.endswith(":latest") and normalized[:-7] in available:
+        return True
+    if f"{normalized}:latest" in available:
+        return True
+    return False
+
+
+def _prioritize_candidates_with_local_models(
+    model_name: str,
+    candidates: list[str],
+    local_models: list[str],
+) -> list[str]:
+    if not local_models:
+        return candidates
+
+    deduped: list[str] = []
+
+    def _add(value: str) -> None:
+        text = value.strip()
+        if text and text not in deduped:
+            deduped.append(text)
+
+    root = model_name.strip().lower().split(":", 1)[0]
+    local_related = []
+    for local_model in local_models:
+        lower = local_model.lower()
+        if root and (root in lower or ("ministral" in root and "mistral" in lower)):
+            local_related.append(local_model)
+
+    for candidate in candidates:
+        if _candidate_available_locally(candidate, local_models):
+            _add(candidate)
+
+    for local_model in local_related:
+        _add(local_model)
+
+    for candidate in candidates:
+        _add(candidate)
+
+    return deduped
+
+
 def load_metrics(path_or_dict: Any) -> dict[str, Any]:
     if isinstance(path_or_dict, dict):
         return path_or_dict
@@ -543,6 +626,12 @@ def _should_try_next_model(exc: Exception, error_text: str) -> bool:
         return True
     if "response content is empty" in lowered:
         return True
+    if "http error 404" in lowered:
+        return True
+    if "timed out" in lowered or "timeout" in lowered:
+        return True
+    if "non-local model candidate" in lowered:
+        return True
     return False
 
 
@@ -714,6 +803,14 @@ def review_with_llm(
         if use_cli_fallback is not None
         else _resolve_bool_env("OLLAMA_USE_CLI_FALLBACK", DEFAULT_OLLAMA_USE_CLI_FALLBACK)
     )
+    local_models = (
+        _list_local_ollama_models(host, timeout_seconds) if cli_fallback_enabled else []
+    )
+    model_candidates = _prioritize_candidates_with_local_models(
+        model_name=model_name,
+        candidates=model_candidates,
+        local_models=local_models,
+    )
 
     backend = {
         "provider": "ollama",
@@ -729,6 +826,8 @@ def review_with_llm(
         "cli_fallback_enabled": cli_fallback_enabled,
         "cli_attempted": False,
     }
+    if local_models:
+        backend["local_models"] = local_models[:20]
 
     system_prompt = (
         "You are a performance analysis assistant. "
@@ -815,45 +914,51 @@ def review_with_llm(
 
             if cli_fallback_enabled and _should_try_cli_after_http_error(exc):
                 backend["cli_attempted"] = True
-                try:
-                    raw_response, cli_meta = _run_ollama_cli(
-                        messages=messages,
-                        host=host,
-                        model=candidate,
-                        timeout_s=timeout_seconds,
+                if local_models and not _candidate_available_locally(candidate, local_models):
+                    backend["cli_error"] = (
+                        f"ollama CLI skipped non-local model candidate: {candidate}"
                     )
-                    attempted_endpoints = cli_meta.get("attempted_endpoints", [])
-                    if isinstance(attempted_endpoints, list):
-                        for endpoint in attempted_endpoints:
-                            if endpoint not in backend["attempted_endpoints"]:
-                                backend["attempted_endpoints"].append(endpoint)
-                    endpoint = cli_meta.get("endpoint")
-                    if endpoint:
-                        backend["endpoint"] = endpoint
-                    backend["transport"] = str(cli_meta.get("transport") or "cli")
+                    backend["error"] = f"{exc}; cli: {backend['cli_error']}"
+                else:
+                    try:
+                        raw_response, cli_meta = _run_ollama_cli(
+                            messages=messages,
+                            host=host,
+                            model=candidate,
+                            timeout_s=timeout_seconds,
+                        )
+                        attempted_endpoints = cli_meta.get("attempted_endpoints", [])
+                        if isinstance(attempted_endpoints, list):
+                            for endpoint in attempted_endpoints:
+                                if endpoint not in backend["attempted_endpoints"]:
+                                    backend["attempted_endpoints"].append(endpoint)
+                        endpoint = cli_meta.get("endpoint")
+                        if endpoint:
+                            backend["endpoint"] = endpoint
+                        backend["transport"] = str(cli_meta.get("transport") or "cli")
 
-                    raw_content, response_source = _extract_llm_content(raw_response)
-                    parsed_content, parse_mode = _parse_ollama_content(raw_content)
-                    parsed = _normalize_insights(parsed_content)
-                    backend["status"] = "ok"
-                    backend["used_ollama"] = True
-                    backend["model"] = candidate
-                    backend["error"] = None
-                    backend["cli_error"] = None
-                    backend["parse_mode"] = parse_mode
-                    backend["response_source"] = response_source
-                    backend["cli_fallback_used"] = True
-                    backend["model_alias_used"] = candidate != model_name
-                    return {
-                        "insights": parsed,
-                        "comparison": comparison_result,
-                        "raw_llm": raw_content if return_raw else None,
-                        "backend": backend,
-                        "heuristic_fallback": False,
-                    }
-                except Exception as cli_exc:
-                    backend["cli_error"] = str(cli_exc)
-                    backend["error"] = f"{exc}; cli: {cli_exc}"
+                        raw_content, response_source = _extract_llm_content(raw_response)
+                        parsed_content, parse_mode = _parse_ollama_content(raw_content)
+                        parsed = _normalize_insights(parsed_content)
+                        backend["status"] = "ok"
+                        backend["used_ollama"] = True
+                        backend["model"] = candidate
+                        backend["error"] = None
+                        backend["cli_error"] = None
+                        backend["parse_mode"] = parse_mode
+                        backend["response_source"] = response_source
+                        backend["cli_fallback_used"] = True
+                        backend["model_alias_used"] = candidate != model_name
+                        return {
+                            "insights": parsed,
+                            "comparison": comparison_result,
+                            "raw_llm": raw_content if return_raw else None,
+                            "backend": backend,
+                            "heuristic_fallback": False,
+                        }
+                    except Exception as cli_exc:
+                        backend["cli_error"] = str(cli_exc)
+                        backend["error"] = f"{exc}; cli: {cli_exc}"
 
             error_text = str(backend.get("error") or exc)
             should_try_alias = (
