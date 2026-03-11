@@ -32,7 +32,9 @@ def test_build_metrics_includes_process_and_boot_counts():
     assert metrics["trace"]["events_per_user_process"] == 100.0
     assert metrics["boot"]["boot_order_count"] == 1
     assert metrics["io"]["slow_ops_per_s"] == 0.1
+    assert metrics["io"]["slow_ops_per_user_process"] == 1.0
     assert metrics["io"]["slow_time_avg_ms"] == 500.0
+    assert metrics["io"]["slow_time_per_user_process_s"] == 0.5
     assert metrics["io"]["bytes_per_user_process"] == 512.0
     assert metrics["launch_latency"]["stats"]["coverage_pct"] == 1.0
 

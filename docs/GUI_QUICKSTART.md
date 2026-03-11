@@ -57,6 +57,7 @@ python etl_logchecker.py --gui-quickstart
 - Select the current metrics JSON and, optionally, a baseline metrics JSON.
 - Leave the default `OLLAMA_HOST` and `OLLAMA_MODEL` values unless you need a custom setup.
 - If the first model name is not available locally, the app retries known `ministral` aliases automatically.
+- Keep `Use local ollama CLI fallback if HTTP endpoints fail` enabled unless you intentionally want HTTP-only behavior.
 - Click `Run Agentic Diagnose`.
 
 If Ollama is not reachable, the app falls back to the built-in heuristic summary

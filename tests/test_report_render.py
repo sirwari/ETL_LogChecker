@@ -34,7 +34,9 @@ def test_render_report_shows_added_metrics():
             "slow_time_s": 1.5,
             "slow_time_pct": 0.125,
             "slow_ops_per_s": 0.42,
+            "slow_ops_per_user_process": 0.83,
             "slow_time_avg_ms": 300.0,
+            "slow_time_per_user_process_s": 0.25,
             "percentiles_s": {"p50_s": 0.1, "p95_s": 0.5, "p99_s": 1.0},
             "histogram": {"<= 1 ms": 10},
         },
@@ -61,7 +63,9 @@ def test_render_report_shows_added_metrics():
     assert "User process ratio" in html
     assert "Slow ops %" in html
     assert "Slow ops / s" in html
+    assert "Slow ops / user process" in html
     assert "Avg slow I/O (ms)" in html
+    assert "Slow I/O s / user process" in html
     assert "I/O p99" in html
     assert "I/O throughput" in html
     assert "Launch avg:" in html
@@ -84,6 +88,9 @@ def test_format_review_diagnose_includes_backend_details():
             "endpoint": "/api/generate",
             "attempted_endpoints": ["/api/chat", "/api/generate"],
             "request_timeout_s": 90.0,
+            "transport": "http",
+            "cli_fallback_enabled": True,
+            "cli_error": "ollama CLI not found on PATH.",
         },
         "insights": {
             "summary": "Fallback summary.",
@@ -100,8 +107,11 @@ def test_format_review_diagnose_includes_backend_details():
     assert "Agentic Diagnose (Ollama)" in text
     assert "Status: Heuristic fallback" in text
     assert "Endpoint: /api/generate" in text
+    assert "Transport: http" in text
     assert "Attempted endpoints: /api/chat, /api/generate" in text
     assert "Attempted models: ministral:latest, ministral-3:latest" in text
+    assert "CLI fallback enabled: yes" in text
+    assert "CLI fallback error: ollama CLI not found on PATH." in text
     assert "Timeout: 90.0s" in text
     assert "Fallback reason: connection refused" in text
     assert "- Launch p95 (12.00%)" in text
