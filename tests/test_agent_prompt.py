@@ -406,3 +406,43 @@ def test_review_uses_discovered_local_model_after_cli_timeout(monkeypatch):
     assert result["backend"]["model"] == "mistral"
     assert result["backend"]["error"] is None
     assert result["backend"]["cli_error"] is None
+
+
+def test_review_parses_cli_plain_text_output(monkeypatch):
+    def _http_fail(**kwargs):
+        raise etl_agent.OllamaRequestError(
+            "/api/chat: HTTP Error 404: Not Found; /api/generate: HTTP Error 404: Not Found",
+            ["/api/chat", "/api/generate"],
+        )
+
+    def _cli_plain_text(**kwargs):
+        return (
+            {
+                "message": {
+                    "content": """Summary
+Run completed with stable latency.
+
+Observations
+- App start is smooth
+
+Recommendations
+- Keep current launch tuning"""
+                }
+            },
+            {
+                "endpoint": "ollama_cli",
+                "attempted_endpoints": ["ollama_cli"],
+                "transport": "cli",
+            },
+        )
+
+    monkeypatch.setattr(etl_agent, "ollama_chat", _http_fail)
+    monkeypatch.setattr(etl_agent, "_run_ollama_cli", _cli_plain_text)
+
+    result = etl_agent.review_with_llm(_sample_metrics(), model="ministral:latest")
+
+    assert result["heuristic_fallback"] is False
+    assert result["backend"]["transport"] == "cli"
+    assert result["backend"]["endpoint"] == "ollama_cli"
+    assert result["backend"]["parse_mode"] == "text_relaxed"
+    assert result["insights"]["summary"] == "Run completed with stable latency."

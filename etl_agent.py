@@ -938,7 +938,14 @@ def review_with_llm(
                         backend["transport"] = str(cli_meta.get("transport") or "cli")
 
                         raw_content, response_source = _extract_llm_content(raw_response)
-                        parsed_content, parse_mode = _parse_ollama_content(raw_content)
+                        try:
+                            parsed_content, parse_mode = _parse_ollama_content(raw_content)
+                        except ValueError:
+                            text_insights = _parse_ollama_text_insights(raw_content)
+                            if text_insights is None:
+                                raise
+                            parsed_content = text_insights
+                            parse_mode = "text_relaxed"
                         parsed = _normalize_insights(parsed_content)
                         backend["status"] = "ok"
                         backend["used_ollama"] = True
