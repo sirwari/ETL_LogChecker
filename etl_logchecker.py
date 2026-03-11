@@ -3319,6 +3319,9 @@ def _format_review_diagnose(result: dict[str, Any]) -> str:
         lines.append(
             "Attempted models: " + ", ".join(str(item) for item in attempted_models)
         )
+    local_models = backend.get("local_models")
+    if isinstance(local_models, list) and local_models:
+        lines.append("Local models: " + ", ".join(str(item) for item in local_models))
     timeout_s = backend.get("request_timeout_s")
     if isinstance(timeout_s, (int, float)):
         lines.append(f"Timeout: {float(timeout_s):.1f}s")
