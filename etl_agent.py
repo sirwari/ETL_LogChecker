@@ -69,6 +69,29 @@ class OllamaCliError(RuntimeError):
     pass
 
 
+def _has_meaningful_text(value: Any) -> bool:
+    text = "" if value is None else str(value).strip()
+    if not text:
+        return False
+    if re.fullmatch(r"[{}\[\]`\"':,.;\s]+", text):
+        return False
+    if text.startswith("{") and not text.endswith("}"):
+        return False
+    if text.startswith("[") and not text.endswith("]"):
+        return False
+    return bool(re.search(r"[A-Za-z0-9]", text))
+
+
+def _insights_have_signal(payload: dict[str, Any]) -> bool:
+    if _has_meaningful_text(payload.get("summary")):
+        return True
+    for key in _INSIGHT_LIST_KEYS:
+        items = payload.get(key)
+        if isinstance(items, list) and any(_has_meaningful_text(item) for item in items):
+            return True
+    return False
+
+
 def load_metrics(path_or_dict: Any) -> dict[str, Any]:
     if isinstance(path_or_dict, dict):
         return path_or_dict
@@ -381,6 +404,8 @@ def _parse_ollama_text_insights(content: Any) -> dict[str, Any] | None:
     has_any_detail = any(parsed[key] for key in _INSIGHT_LIST_KEYS)
     if not has_any_detail and has_section_marker:
         parsed["observations"] = summary_lines[:5]
+    if not _insights_have_signal(parsed):
+        return None
     return parsed
 
 
@@ -506,6 +531,19 @@ def _should_try_cli_after_http_error(exc: Exception) -> bool:
     if isinstance(exc, ValueError):
         return True
     return isinstance(exc, TimeoutError)
+
+
+def _should_try_next_model(exc: Exception, error_text: str) -> bool:
+    if _is_model_not_found_error(error_text):
+        return True
+    if isinstance(exc, ValueError):
+        return True
+    lowered = error_text.lower()
+    if "did not contain a json object" in lowered:
+        return True
+    if "response content is empty" in lowered:
+        return True
+    return False
 
 
 def _build_cli_prompt(messages: list[dict[str, str]]) -> str:
@@ -752,6 +790,8 @@ def review_with_llm(
             backend["status"] = "ok"
             backend["used_ollama"] = True
             backend["model"] = candidate
+            backend["error"] = None
+            backend["cli_error"] = None
             if endpoint:
                 backend["endpoint"] = endpoint
             if transport:
@@ -798,6 +838,8 @@ def review_with_llm(
                     backend["status"] = "ok"
                     backend["used_ollama"] = True
                     backend["model"] = candidate
+                    backend["error"] = None
+                    backend["cli_error"] = None
                     backend["parse_mode"] = parse_mode
                     backend["response_source"] = response_source
                     backend["cli_fallback_used"] = True
@@ -813,9 +855,10 @@ def review_with_llm(
                     backend["cli_error"] = str(cli_exc)
                     backend["error"] = f"{exc}; cli: {cli_exc}"
 
+            error_text = str(backend.get("error") or exc)
             should_try_alias = (
                 idx + 1 < len(model_candidates)
-                and _is_model_not_found_error(str(backend.get("error") or exc))
+                and _should_try_next_model(exc, error_text)
             )
             if should_try_alias:
                 continue

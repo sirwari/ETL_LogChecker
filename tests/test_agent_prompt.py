@@ -212,6 +212,47 @@ Recommendations
     assert "Slow I/O is low" in result["insights"]["observations"]
 
 
+def test_review_ignores_junk_text_and_retries_next_alias(monkeypatch):
+    seen_models: list[str] = []
+
+    def _chat(**kwargs):
+        model = kwargs["model"]
+        seen_models.append(model)
+        if model in {"ministral:latest", "ministral"}:
+            raise RuntimeError("pull model manifest: file does not exist")
+        if model == "ministral-3:latest":
+            return {"message": {"content": "{"}}
+        if model == "mistral:latest":
+            return {
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "summary": "Recovered after skipping invalid payload.",
+                            "regressions": [],
+                            "improvements": [],
+                            "observations": ["Model output is now valid JSON."],
+                            "recommendations": [],
+                            "questions": [],
+                        }
+                    )
+                }
+            }
+        raise AssertionError(f"Unexpected model {model}")
+
+    monkeypatch.setattr(etl_agent, "ollama_chat", _chat)
+    result = etl_agent.review_with_llm(
+        _sample_metrics(),
+        model="ministral:latest",
+        use_cli_fallback=False,
+    )
+
+    assert result["heuristic_fallback"] is False
+    assert result["backend"]["model"] == "mistral:latest"
+    assert result["backend"].get("error") is None
+    assert result["backend"].get("cli_error") is None
+    assert "mistral:latest" in seen_models
+
+
 def test_review_retries_legacy_endpoint_when_api_chat_404(monkeypatch):
     class _Response:
         def __init__(self, body: dict[str, object]) -> None:
