@@ -90,7 +90,7 @@ def test_format_review_diagnose_includes_backend_details():
             "request_timeout_s": 90.0,
             "transport": "http",
             "cli_fallback_enabled": True,
-            "cli_error": "ollama CLI not found on PATH.",
+            "cli_error": "\x1b[?25lollama CLI not found on PATH.\x1b[?25h",
         },
         "insights": {
             "summary": "Fallback summary.",

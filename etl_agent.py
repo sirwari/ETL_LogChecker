@@ -48,6 +48,15 @@ _INSIGHT_LIST_KEYS = (
     "recommendations",
     "questions",
 )
+_ANSI_ESCAPE_RE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+_SECTION_TITLES = (
+    "summary",
+    "observations",
+    "regressions",
+    "improvements",
+    "recommendations",
+    "questions",
+)
 
 
 class OllamaRequestError(RuntimeError):
@@ -253,12 +262,22 @@ def _build_model_candidates(model_name: str) -> list[str]:
     if lower_name == "ministral":
         _add("ministral:latest")
         _add("ministral-3:latest")
+        _add("mistral:latest")
+        _add("mistral")
     elif lower_name.startswith("ministral:"):
         _add("ministral")
         _add("ministral-3:latest")
+        _add("mistral:latest")
+        _add("mistral")
     elif lower_name.startswith("ministral-3"):
         _add("ministral:latest")
         _add("ministral")
+        _add("mistral:latest")
+        _add("mistral")
+    elif lower_name == "mistral":
+        _add("mistral:latest")
+    elif lower_name.startswith("mistral:"):
+        _add("mistral")
 
     return candidates
 
@@ -271,6 +290,8 @@ def _is_model_not_found_error(error_text: str) -> bool:
         "not found" in text
         or "pull" in text
         or "does not exist" in text
+        or "manifest" in text
+        or "file does not exist" in text
     )
 
 
@@ -305,6 +326,62 @@ def _parse_ollama_content(content: Any) -> tuple[dict[str, Any], str]:
             return parsed, mode
 
     raise ValueError("Ollama response did not contain a JSON object.")
+
+
+def _sanitize_terminal_text(text: Any) -> str:
+    value = "" if text is None else str(text)
+    value = _ANSI_ESCAPE_RE.sub("", value)
+    value = value.replace("\r", "\n").replace("\b", "")
+    value = re.sub(r"\n{3,}", "\n\n", value)
+    return value.strip()
+
+
+def _parse_ollama_text_insights(content: Any) -> dict[str, Any] | None:
+    if not isinstance(content, str):
+        return None
+    text = _sanitize_terminal_text(content)
+    if not text:
+        return None
+
+    has_section_marker = any(
+        re.search(rf"(^|\n)\s*{title}\s*:?\s*(\n|$)", text, flags=re.IGNORECASE)
+        for title in _SECTION_TITLES
+    )
+
+    parsed: dict[str, Any] = {"summary": "", **{key: [] for key in _INSIGHT_LIST_KEYS}}
+    current_section: str | None = None
+    summary_lines: list[str] = []
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        normalized = line.rstrip(":").strip().lower()
+        if normalized in _SECTION_TITLES:
+            current_section = normalized
+            continue
+
+        bullet = re.sub(r"^[\-*•]\s*", "", line).strip()
+        if current_section == "summary":
+            summary_lines.append(bullet)
+            continue
+        if current_section in _INSIGHT_LIST_KEYS:
+            parsed[current_section].append(bullet)
+            continue
+        summary_lines.append(bullet)
+
+    if summary_lines:
+        parsed["summary"] = (
+            " ".join(summary_lines[:2]) if has_section_marker else summary_lines[0]
+        )
+
+    if not parsed["summary"]:
+        parsed["summary"] = text[:200]
+
+    has_any_detail = any(parsed[key] for key in _INSIGHT_LIST_KEYS)
+    if not has_any_detail and has_section_marker:
+        parsed["observations"] = summary_lines[:5]
+    return parsed
 
 
 def _normalize_insights(payload: dict[str, Any]) -> dict[str, Any]:
@@ -426,6 +503,8 @@ def _should_try_cli_after_http_error(exc: Exception) -> bool:
         return True
     if isinstance(exc, urllib.error.URLError):
         return True
+    if isinstance(exc, ValueError):
+        return True
     return isinstance(exc, TimeoutError)
 
 
@@ -468,8 +547,8 @@ def _run_ollama_cli(
     except Exception as exc:
         raise OllamaCliError(f"ollama CLI failed to start: {exc}") from exc
 
-    stdout = (result.stdout or "").strip()
-    stderr = (result.stderr or "").strip()
+    stdout = _sanitize_terminal_text(result.stdout)
+    stderr = _sanitize_terminal_text(result.stderr)
     if result.returncode != 0:
         details = stderr or stdout or f"exit code {result.returncode}"
         raise OllamaCliError(f"ollama CLI failed: {details}")
@@ -658,15 +737,25 @@ def review_with_llm(
                     if endpoint not in backend["attempted_endpoints"]:
                         backend["attempted_endpoints"].append(endpoint)
             endpoint = chat_meta.get("endpoint")
-            if endpoint:
-                backend["endpoint"] = endpoint
+            transport = chat_meta.get("transport")
 
             raw_content, response_source = _extract_llm_content(raw_response)
-            parsed_content, parse_mode = _parse_ollama_content(raw_content)
+            try:
+                parsed_content, parse_mode = _parse_ollama_content(raw_content)
+            except ValueError:
+                text_insights = _parse_ollama_text_insights(raw_content)
+                if text_insights is None:
+                    raise
+                parsed_content = text_insights
+                parse_mode = "text_relaxed"
             parsed = _normalize_insights(parsed_content)
             backend["status"] = "ok"
             backend["used_ollama"] = True
             backend["model"] = candidate
+            if endpoint:
+                backend["endpoint"] = endpoint
+            if transport:
+                backend["transport"] = str(transport)
             backend["parse_mode"] = parse_mode
             backend["response_source"] = response_source
             backend["model_alias_used"] = candidate != model_name

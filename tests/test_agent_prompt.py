@@ -128,6 +128,41 @@ def test_review_retries_ministral_alias_when_model_missing(monkeypatch):
     assert result["backend"]["model_alias_used"] is True
 
 
+def test_review_retries_typo_model_with_mistral_alias(monkeypatch):
+    seen_models: list[str] = []
+
+    def _chat(**kwargs):
+        model = kwargs["model"]
+        seen_models.append(model)
+        if model != "mistral:latest":
+            raise RuntimeError("pull model manifest: file does not exist")
+        return {
+            "message": {
+                "content": json.dumps(
+                    {
+                        "summary": "Recovered via mistral alias.",
+                        "regressions": [],
+                        "improvements": [],
+                        "observations": [],
+                        "recommendations": [],
+                        "questions": [],
+                    }
+                )
+            }
+        }
+
+    monkeypatch.setattr(etl_agent, "ollama_chat", _chat)
+    result = etl_agent.review_with_llm(
+        _sample_metrics(),
+        model="ministral:latest",
+        use_cli_fallback=False,
+    )
+
+    assert result["heuristic_fallback"] is False
+    assert result["backend"]["model"] == "mistral:latest"
+    assert "mistral:latest" in seen_models
+
+
 def test_review_parses_code_fenced_json(monkeypatch):
     def _chat(**kwargs):
         return {
@@ -151,6 +186,30 @@ def test_review_parses_code_fenced_json(monkeypatch):
     assert result["heuristic_fallback"] is False
     assert result["backend"]["parse_mode"] == "code_fence"
     assert result["insights"]["summary"] == "Parsed from fence."
+
+
+def test_review_parses_plain_text_insights(monkeypatch):
+    def _chat(**kwargs):
+        return {
+            "message": {
+                "content": """Summary
+This run is stable.
+
+Observations
+- Slow I/O is low
+
+Recommendations
+- Keep current tuning"""
+            }
+        }
+
+    monkeypatch.setattr(etl_agent, "ollama_chat", _chat)
+    result = etl_agent.review_with_llm(_sample_metrics(), use_cli_fallback=False)
+
+    assert result["heuristic_fallback"] is False
+    assert result["backend"]["parse_mode"] == "text_relaxed"
+    assert result["insights"]["summary"] == "This run is stable."
+    assert "Slow I/O is low" in result["insights"]["observations"]
 
 
 def test_review_retries_legacy_endpoint_when_api_chat_404(monkeypatch):

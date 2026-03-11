@@ -217,6 +217,8 @@ If `POST /api/chat` is unavailable on your local endpoint, the tool retries
 legacy-compatible endpoints automatically.
 If HTTP endpoints fail completely, the tool can use local `ollama` CLI fallback
 before switching to the heuristic summary.
+If `ministral` aliases are unavailable, the reviewer also retries compatible
+`mistral` model names.
 
 ## Dev Proof Screenshots
 ```bash
