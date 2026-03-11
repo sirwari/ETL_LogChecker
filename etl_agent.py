@@ -48,6 +48,15 @@ _INSIGHT_LIST_KEYS = (
     "recommendations",
     "questions",
 )
+_ANSI_ESCAPE_RE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+_SECTION_TITLES = (
+    "summary",
+    "observations",
+    "regressions",
+    "improvements",
+    "recommendations",
+    "questions",
+)
 
 
 class OllamaRequestError(RuntimeError):
@@ -58,6 +67,112 @@ class OllamaRequestError(RuntimeError):
 
 class OllamaCliError(RuntimeError):
     pass
+
+
+def _has_meaningful_text(value: Any) -> bool:
+    text = "" if value is None else str(value).strip()
+    if not text:
+        return False
+    if re.fullmatch(r"[{}\[\]`\"':,.;\s]+", text):
+        return False
+    if text.startswith("{") and not text.endswith("}"):
+        return False
+    if text.startswith("[") and not text.endswith("]"):
+        return False
+    return bool(re.search(r"[A-Za-z0-9]", text))
+
+
+def _insights_have_signal(payload: dict[str, Any]) -> bool:
+    if _has_meaningful_text(payload.get("summary")):
+        return True
+    for key in _INSIGHT_LIST_KEYS:
+        items = payload.get(key)
+        if isinstance(items, list) and any(_has_meaningful_text(item) for item in items):
+            return True
+    return False
+
+
+def _parse_ollama_list(stdout: str) -> list[str]:
+    models: list[str] = []
+    for raw_line in stdout.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.lower().startswith("name"):
+            continue
+        name = line.split()[0].strip()
+        if name and name not in models:
+            models.append(name)
+    return models
+
+
+def _list_local_ollama_models(host: str, timeout_s: float) -> list[str]:
+    env = os.environ.copy()
+    if host:
+        env["OLLAMA_HOST"] = host
+    timeout = max(5.0, min(15.0, float(timeout_s)))
+    try:
+        result = subprocess.run(
+            ["ollama", "list"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+            env=env,
+        )
+    except Exception:
+        return []
+    stdout = _sanitize_terminal_text(result.stdout)
+    if not stdout:
+        return []
+    return _parse_ollama_list(stdout)
+
+
+def _candidate_available_locally(candidate: str, local_models: list[str]) -> bool:
+    normalized = candidate.strip().lower()
+    available = {item.strip().lower() for item in local_models if str(item).strip()}
+    if normalized in available:
+        return True
+    if normalized.endswith(":latest") and normalized[:-7] in available:
+        return True
+    if f"{normalized}:latest" in available:
+        return True
+    return False
+
+
+def _prioritize_candidates_with_local_models(
+    model_name: str,
+    candidates: list[str],
+    local_models: list[str],
+) -> list[str]:
+    if not local_models:
+        return candidates
+
+    deduped: list[str] = []
+
+    def _add(value: str) -> None:
+        text = value.strip()
+        if text and text not in deduped:
+            deduped.append(text)
+
+    root = model_name.strip().lower().split(":", 1)[0]
+    local_related = []
+    for local_model in local_models:
+        lower = local_model.lower()
+        if root and (root in lower or ("ministral" in root and "mistral" in lower)):
+            local_related.append(local_model)
+
+    for candidate in candidates:
+        if _candidate_available_locally(candidate, local_models):
+            _add(candidate)
+
+    for local_model in local_related:
+        _add(local_model)
+
+    for candidate in candidates:
+        _add(candidate)
+
+    return deduped
 
 
 def load_metrics(path_or_dict: Any) -> dict[str, Any]:
@@ -253,12 +368,22 @@ def _build_model_candidates(model_name: str) -> list[str]:
     if lower_name == "ministral":
         _add("ministral:latest")
         _add("ministral-3:latest")
+        _add("mistral:latest")
+        _add("mistral")
     elif lower_name.startswith("ministral:"):
         _add("ministral")
         _add("ministral-3:latest")
+        _add("mistral:latest")
+        _add("mistral")
     elif lower_name.startswith("ministral-3"):
         _add("ministral:latest")
         _add("ministral")
+        _add("mistral:latest")
+        _add("mistral")
+    elif lower_name == "mistral":
+        _add("mistral:latest")
+    elif lower_name.startswith("mistral:"):
+        _add("mistral")
 
     return candidates
 
@@ -271,6 +396,8 @@ def _is_model_not_found_error(error_text: str) -> bool:
         "not found" in text
         or "pull" in text
         or "does not exist" in text
+        or "manifest" in text
+        or "file does not exist" in text
     )
 
 
@@ -305,6 +432,64 @@ def _parse_ollama_content(content: Any) -> tuple[dict[str, Any], str]:
             return parsed, mode
 
     raise ValueError("Ollama response did not contain a JSON object.")
+
+
+def _sanitize_terminal_text(text: Any) -> str:
+    value = "" if text is None else str(text)
+    value = _ANSI_ESCAPE_RE.sub("", value)
+    value = value.replace("\r", "\n").replace("\b", "")
+    value = re.sub(r"\n{3,}", "\n\n", value)
+    return value.strip()
+
+
+def _parse_ollama_text_insights(content: Any) -> dict[str, Any] | None:
+    if not isinstance(content, str):
+        return None
+    text = _sanitize_terminal_text(content)
+    if not text:
+        return None
+
+    has_section_marker = any(
+        re.search(rf"(^|\n)\s*{title}\s*:?\s*(\n|$)", text, flags=re.IGNORECASE)
+        for title in _SECTION_TITLES
+    )
+
+    parsed: dict[str, Any] = {"summary": "", **{key: [] for key in _INSIGHT_LIST_KEYS}}
+    current_section: str | None = None
+    summary_lines: list[str] = []
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        normalized = line.rstrip(":").strip().lower()
+        if normalized in _SECTION_TITLES:
+            current_section = normalized
+            continue
+
+        bullet = re.sub(r"^[\-*•]\s*", "", line).strip()
+        if current_section == "summary":
+            summary_lines.append(bullet)
+            continue
+        if current_section in _INSIGHT_LIST_KEYS:
+            parsed[current_section].append(bullet)
+            continue
+        summary_lines.append(bullet)
+
+    if summary_lines:
+        parsed["summary"] = (
+            " ".join(summary_lines[:2]) if has_section_marker else summary_lines[0]
+        )
+
+    if not parsed["summary"]:
+        parsed["summary"] = text[:200]
+
+    has_any_detail = any(parsed[key] for key in _INSIGHT_LIST_KEYS)
+    if not has_any_detail and has_section_marker:
+        parsed["observations"] = summary_lines[:5]
+    if not _insights_have_signal(parsed):
+        return None
+    return parsed
 
 
 def _normalize_insights(payload: dict[str, Any]) -> dict[str, Any]:
@@ -426,7 +611,28 @@ def _should_try_cli_after_http_error(exc: Exception) -> bool:
         return True
     if isinstance(exc, urllib.error.URLError):
         return True
+    if isinstance(exc, ValueError):
+        return True
     return isinstance(exc, TimeoutError)
+
+
+def _should_try_next_model(exc: Exception, error_text: str) -> bool:
+    if _is_model_not_found_error(error_text):
+        return True
+    if isinstance(exc, ValueError):
+        return True
+    lowered = error_text.lower()
+    if "did not contain a json object" in lowered:
+        return True
+    if "response content is empty" in lowered:
+        return True
+    if "http error 404" in lowered:
+        return True
+    if "timed out" in lowered or "timeout" in lowered:
+        return True
+    if "non-local model candidate" in lowered:
+        return True
+    return False
 
 
 def _build_cli_prompt(messages: list[dict[str, str]]) -> str:
@@ -468,8 +674,8 @@ def _run_ollama_cli(
     except Exception as exc:
         raise OllamaCliError(f"ollama CLI failed to start: {exc}") from exc
 
-    stdout = (result.stdout or "").strip()
-    stderr = (result.stderr or "").strip()
+    stdout = _sanitize_terminal_text(result.stdout)
+    stderr = _sanitize_terminal_text(result.stderr)
     if result.returncode != 0:
         details = stderr or stdout or f"exit code {result.returncode}"
         raise OllamaCliError(f"ollama CLI failed: {details}")
@@ -597,6 +803,14 @@ def review_with_llm(
         if use_cli_fallback is not None
         else _resolve_bool_env("OLLAMA_USE_CLI_FALLBACK", DEFAULT_OLLAMA_USE_CLI_FALLBACK)
     )
+    local_models = (
+        _list_local_ollama_models(host, timeout_seconds) if cli_fallback_enabled else []
+    )
+    model_candidates = _prioritize_candidates_with_local_models(
+        model_name=model_name,
+        candidates=model_candidates,
+        local_models=local_models,
+    )
 
     backend = {
         "provider": "ollama",
@@ -612,6 +826,8 @@ def review_with_llm(
         "cli_fallback_enabled": cli_fallback_enabled,
         "cli_attempted": False,
     }
+    if local_models:
+        backend["local_models"] = local_models[:20]
 
     system_prompt = (
         "You are a performance analysis assistant. "
@@ -658,15 +874,27 @@ def review_with_llm(
                     if endpoint not in backend["attempted_endpoints"]:
                         backend["attempted_endpoints"].append(endpoint)
             endpoint = chat_meta.get("endpoint")
-            if endpoint:
-                backend["endpoint"] = endpoint
+            transport = chat_meta.get("transport")
 
             raw_content, response_source = _extract_llm_content(raw_response)
-            parsed_content, parse_mode = _parse_ollama_content(raw_content)
+            try:
+                parsed_content, parse_mode = _parse_ollama_content(raw_content)
+            except ValueError:
+                text_insights = _parse_ollama_text_insights(raw_content)
+                if text_insights is None:
+                    raise
+                parsed_content = text_insights
+                parse_mode = "text_relaxed"
             parsed = _normalize_insights(parsed_content)
             backend["status"] = "ok"
             backend["used_ollama"] = True
             backend["model"] = candidate
+            backend["error"] = None
+            backend["cli_error"] = None
+            if endpoint:
+                backend["endpoint"] = endpoint
+            if transport:
+                backend["transport"] = str(transport)
             backend["parse_mode"] = parse_mode
             backend["response_source"] = response_source
             backend["model_alias_used"] = candidate != model_name
@@ -686,47 +914,63 @@ def review_with_llm(
 
             if cli_fallback_enabled and _should_try_cli_after_http_error(exc):
                 backend["cli_attempted"] = True
-                try:
-                    raw_response, cli_meta = _run_ollama_cli(
-                        messages=messages,
-                        host=host,
-                        model=candidate,
-                        timeout_s=timeout_seconds,
+                if local_models and not _candidate_available_locally(candidate, local_models):
+                    backend["cli_error"] = (
+                        f"ollama CLI skipped non-local model candidate: {candidate}"
                     )
-                    attempted_endpoints = cli_meta.get("attempted_endpoints", [])
-                    if isinstance(attempted_endpoints, list):
-                        for endpoint in attempted_endpoints:
-                            if endpoint not in backend["attempted_endpoints"]:
-                                backend["attempted_endpoints"].append(endpoint)
-                    endpoint = cli_meta.get("endpoint")
-                    if endpoint:
-                        backend["endpoint"] = endpoint
-                    backend["transport"] = str(cli_meta.get("transport") or "cli")
+                    backend["error"] = f"{exc}; cli: {backend['cli_error']}"
+                else:
+                    try:
+                        raw_response, cli_meta = _run_ollama_cli(
+                            messages=messages,
+                            host=host,
+                            model=candidate,
+                            timeout_s=timeout_seconds,
+                        )
+                        attempted_endpoints = cli_meta.get("attempted_endpoints", [])
+                        if isinstance(attempted_endpoints, list):
+                            for endpoint in attempted_endpoints:
+                                if endpoint not in backend["attempted_endpoints"]:
+                                    backend["attempted_endpoints"].append(endpoint)
+                        endpoint = cli_meta.get("endpoint")
+                        if endpoint:
+                            backend["endpoint"] = endpoint
+                        backend["transport"] = str(cli_meta.get("transport") or "cli")
 
-                    raw_content, response_source = _extract_llm_content(raw_response)
-                    parsed_content, parse_mode = _parse_ollama_content(raw_content)
-                    parsed = _normalize_insights(parsed_content)
-                    backend["status"] = "ok"
-                    backend["used_ollama"] = True
-                    backend["model"] = candidate
-                    backend["parse_mode"] = parse_mode
-                    backend["response_source"] = response_source
-                    backend["cli_fallback_used"] = True
-                    backend["model_alias_used"] = candidate != model_name
-                    return {
-                        "insights": parsed,
-                        "comparison": comparison_result,
-                        "raw_llm": raw_content if return_raw else None,
-                        "backend": backend,
-                        "heuristic_fallback": False,
-                    }
-                except Exception as cli_exc:
-                    backend["cli_error"] = str(cli_exc)
-                    backend["error"] = f"{exc}; cli: {cli_exc}"
+                        raw_content, response_source = _extract_llm_content(raw_response)
+                        try:
+                            parsed_content, parse_mode = _parse_ollama_content(raw_content)
+                        except ValueError:
+                            text_insights = _parse_ollama_text_insights(raw_content)
+                            if text_insights is None:
+                                raise
+                            parsed_content = text_insights
+                            parse_mode = "text_relaxed"
+                        parsed = _normalize_insights(parsed_content)
+                        backend["status"] = "ok"
+                        backend["used_ollama"] = True
+                        backend["model"] = candidate
+                        backend["error"] = None
+                        backend["cli_error"] = None
+                        backend["parse_mode"] = parse_mode
+                        backend["response_source"] = response_source
+                        backend["cli_fallback_used"] = True
+                        backend["model_alias_used"] = candidate != model_name
+                        return {
+                            "insights": parsed,
+                            "comparison": comparison_result,
+                            "raw_llm": raw_content if return_raw else None,
+                            "backend": backend,
+                            "heuristic_fallback": False,
+                        }
+                    except Exception as cli_exc:
+                        backend["cli_error"] = str(cli_exc)
+                        backend["error"] = f"{exc}; cli: {cli_exc}"
 
+            error_text = str(backend.get("error") or exc)
             should_try_alias = (
                 idx + 1 < len(model_candidates)
-                and _is_model_not_found_error(str(backend.get("error") or exc))
+                and _should_try_next_model(exc, error_text)
             )
             if should_try_alias:
                 continue

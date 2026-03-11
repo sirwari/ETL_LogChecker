@@ -2,6 +2,7 @@ import json
 import urllib.error
 
 import etl_agent
+import pytest
 
 
 def _sample_metrics():
@@ -43,6 +44,11 @@ def _sample_metrics():
         "top_files": [{"file": "C:/file", "slow_time_s": 1.0}],
         "process_lifetimes": [{"image": "app.exe", "lifetime_s": 9.0}],
     }
+
+
+@pytest.fixture(autouse=True)
+def _stub_local_models(monkeypatch):
+    monkeypatch.setattr(etl_agent, "_list_local_ollama_models", lambda host, timeout_s: [])
 
 
 def test_compact_summary_shape():
@@ -128,6 +134,41 @@ def test_review_retries_ministral_alias_when_model_missing(monkeypatch):
     assert result["backend"]["model_alias_used"] is True
 
 
+def test_review_retries_typo_model_with_mistral_alias(monkeypatch):
+    seen_models: list[str] = []
+
+    def _chat(**kwargs):
+        model = kwargs["model"]
+        seen_models.append(model)
+        if model != "mistral:latest":
+            raise RuntimeError("pull model manifest: file does not exist")
+        return {
+            "message": {
+                "content": json.dumps(
+                    {
+                        "summary": "Recovered via mistral alias.",
+                        "regressions": [],
+                        "improvements": [],
+                        "observations": [],
+                        "recommendations": [],
+                        "questions": [],
+                    }
+                )
+            }
+        }
+
+    monkeypatch.setattr(etl_agent, "ollama_chat", _chat)
+    result = etl_agent.review_with_llm(
+        _sample_metrics(),
+        model="ministral:latest",
+        use_cli_fallback=False,
+    )
+
+    assert result["heuristic_fallback"] is False
+    assert result["backend"]["model"] == "mistral:latest"
+    assert "mistral:latest" in seen_models
+
+
 def test_review_parses_code_fenced_json(monkeypatch):
     def _chat(**kwargs):
         return {
@@ -151,6 +192,71 @@ def test_review_parses_code_fenced_json(monkeypatch):
     assert result["heuristic_fallback"] is False
     assert result["backend"]["parse_mode"] == "code_fence"
     assert result["insights"]["summary"] == "Parsed from fence."
+
+
+def test_review_parses_plain_text_insights(monkeypatch):
+    def _chat(**kwargs):
+        return {
+            "message": {
+                "content": """Summary
+This run is stable.
+
+Observations
+- Slow I/O is low
+
+Recommendations
+- Keep current tuning"""
+            }
+        }
+
+    monkeypatch.setattr(etl_agent, "ollama_chat", _chat)
+    result = etl_agent.review_with_llm(_sample_metrics(), use_cli_fallback=False)
+
+    assert result["heuristic_fallback"] is False
+    assert result["backend"]["parse_mode"] == "text_relaxed"
+    assert result["insights"]["summary"] == "This run is stable."
+    assert "Slow I/O is low" in result["insights"]["observations"]
+
+
+def test_review_ignores_junk_text_and_retries_next_alias(monkeypatch):
+    seen_models: list[str] = []
+
+    def _chat(**kwargs):
+        model = kwargs["model"]
+        seen_models.append(model)
+        if model in {"ministral:latest", "ministral"}:
+            raise RuntimeError("pull model manifest: file does not exist")
+        if model == "ministral-3:latest":
+            return {"message": {"content": "{"}}
+        if model == "mistral:latest":
+            return {
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "summary": "Recovered after skipping invalid payload.",
+                            "regressions": [],
+                            "improvements": [],
+                            "observations": ["Model output is now valid JSON."],
+                            "recommendations": [],
+                            "questions": [],
+                        }
+                    )
+                }
+            }
+        raise AssertionError(f"Unexpected model {model}")
+
+    monkeypatch.setattr(etl_agent, "ollama_chat", _chat)
+    result = etl_agent.review_with_llm(
+        _sample_metrics(),
+        model="ministral:latest",
+        use_cli_fallback=False,
+    )
+
+    assert result["heuristic_fallback"] is False
+    assert result["backend"]["model"] == "mistral:latest"
+    assert result["backend"].get("error") is None
+    assert result["backend"].get("cli_error") is None
+    assert "mistral:latest" in seen_models
 
 
 def test_review_retries_legacy_endpoint_when_api_chat_404(monkeypatch):
@@ -248,3 +354,95 @@ def test_review_uses_cli_fallback_when_http_endpoints_fail(monkeypatch):
     assert result["backend"]["cli_fallback_used"] is True
     assert "/api/chat" in result["backend"]["attempted_endpoints"]
     assert "ollama_cli" in result["backend"]["attempted_endpoints"]
+
+
+def test_review_uses_discovered_local_model_after_cli_timeout(monkeypatch):
+    def _http_fail(**kwargs):
+        raise etl_agent.OllamaRequestError(
+            "/api/chat: HTTP Error 404: Not Found; /api/generate: HTTP Error 404: Not Found",
+            ["/api/chat", "/api/generate"],
+        )
+
+    def _cli_run(**kwargs):
+        model = kwargs["model"]
+        if model == "mistral:latest":
+            raise etl_agent.OllamaCliError("ollama CLI timed out after 90.0s.")
+        if model == "mistral":
+            return (
+                {
+                    "message": {
+                        "content": json.dumps(
+                            {
+                                "summary": "Recovered using locally available mistral.",
+                                "regressions": [],
+                                "improvements": [],
+                                "observations": [],
+                                "recommendations": [],
+                                "questions": [],
+                            }
+                        )
+                    }
+                },
+                {
+                    "endpoint": "ollama_cli",
+                    "attempted_endpoints": ["ollama_cli"],
+                    "transport": "cli",
+                },
+            )
+        raise etl_agent.OllamaCliError("ollama CLI failed: pull model manifest: file does not exist")
+
+    monkeypatch.setattr(
+        etl_agent,
+        "_list_local_ollama_models",
+        lambda host, timeout_s: ["mistral"],
+    )
+    monkeypatch.setattr(etl_agent, "ollama_chat", _http_fail)
+    monkeypatch.setattr(etl_agent, "_run_ollama_cli", _cli_run)
+
+    result = etl_agent.review_with_llm(_sample_metrics(), model="ministral:latest")
+
+    assert result["heuristic_fallback"] is False
+    assert result["backend"]["transport"] == "cli"
+    assert result["backend"]["model"] == "mistral"
+    assert result["backend"]["error"] is None
+    assert result["backend"]["cli_error"] is None
+
+
+def test_review_parses_cli_plain_text_output(monkeypatch):
+    def _http_fail(**kwargs):
+        raise etl_agent.OllamaRequestError(
+            "/api/chat: HTTP Error 404: Not Found; /api/generate: HTTP Error 404: Not Found",
+            ["/api/chat", "/api/generate"],
+        )
+
+    def _cli_plain_text(**kwargs):
+        return (
+            {
+                "message": {
+                    "content": """Summary
+Run completed with stable latency.
+
+Observations
+- App start is smooth
+
+Recommendations
+- Keep current launch tuning"""
+                }
+            },
+            {
+                "endpoint": "ollama_cli",
+                "attempted_endpoints": ["ollama_cli"],
+                "transport": "cli",
+            },
+        )
+
+    monkeypatch.setattr(etl_agent, "ollama_chat", _http_fail)
+    monkeypatch.setattr(etl_agent, "_run_ollama_cli", _cli_plain_text)
+
+    result = etl_agent.review_with_llm(_sample_metrics(), model="ministral:latest")
+
+    assert result["heuristic_fallback"] is False
+    assert result["backend"]["transport"] == "cli"
+    assert result["backend"]["endpoint"] == "ollama_cli"
+    assert result["backend"]["parse_mode"] == "text_relaxed"
+    assert result["insights"]["summary"] == "Run completed with stable latency."

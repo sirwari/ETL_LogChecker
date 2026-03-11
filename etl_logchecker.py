@@ -8,6 +8,7 @@ import json
 import math
 import os
 import queue
+import re
 import subprocess
 import sys
 import tempfile
@@ -333,6 +334,14 @@ def _safe_div(numerator: float, denominator: float) -> float:
     if denominator == 0:
         return 0.0
     return numerator / denominator
+
+
+def _sanitize_display_text(text: Any) -> str:
+    value = "" if text is None else str(text)
+    value = re.sub(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])", "", value)
+    value = value.replace("\r", "\n")
+    value = re.sub(r"\s+", " ", value).strip()
+    return value
 
 
 def render_gui_quickstart_text() -> str:
@@ -3310,6 +3319,9 @@ def _format_review_diagnose(result: dict[str, Any]) -> str:
         lines.append(
             "Attempted models: " + ", ".join(str(item) for item in attempted_models)
         )
+    local_models = backend.get("local_models")
+    if isinstance(local_models, list) and local_models:
+        lines.append("Local models: " + ", ".join(str(item) for item in local_models))
     timeout_s = backend.get("request_timeout_s")
     if isinstance(timeout_s, (int, float)):
         lines.append(f"Timeout: {float(timeout_s):.1f}s")
@@ -3324,11 +3336,11 @@ def _format_review_diagnose(result: dict[str, Any]) -> str:
         lines.append("CLI fallback used: yes")
     cli_error = backend.get("cli_error")
     if cli_error:
-        lines.append(f"CLI fallback error: {cli_error}")
+        lines.append(f"CLI fallback error: {_sanitize_display_text(cli_error)}")
 
     error = backend.get("error")
     if error:
-        lines.append(f"Fallback reason: {error}")
+        lines.append(f"Fallback reason: {_sanitize_display_text(error)}")
 
     summary = insights.get("summary")
     if summary:

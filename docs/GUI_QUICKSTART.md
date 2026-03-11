@@ -63,6 +63,7 @@ python etl_logchecker.py --gui-quickstart
 If Ollama is not reachable, the app falls back to the built-in heuristic summary
 and shows that fallback status in the output.
 If `/api/chat` is unavailable, the app retries compatible Ollama endpoints automatically.
+If `ministral` names fail, the app retries equivalent `mistral` aliases.
 
 ## 6. Generated Files
 With auto-output enabled, the GUI writes files in a timestamped folder named

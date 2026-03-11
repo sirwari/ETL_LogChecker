@@ -55,7 +55,7 @@
 - `compact_metrics_summary(...)`: trims metrics for prompt payloads and summaries
 - `compare_and_score(...)`: compares one current run against one baseline
 - `compare_many(...)`: ranks multiple current runs against one baseline
-- `review_with_llm(...)`: Ollama-backed review with heuristic fallback
+- `review_with_llm(...)`: Ollama-backed review with endpoint/model fallbacks, relaxed text parsing, and heuristic fallback
 
 ### `etl_runner.py`
 - `analyze_etl(...)`: wrapper around `run_analysis_job(...)`

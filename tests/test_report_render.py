@@ -85,12 +85,13 @@ def test_format_review_diagnose_includes_backend_details():
             "status": "fallback",
             "error": "connection refused",
             "attempted_models": ["ministral:latest", "ministral-3:latest"],
+            "local_models": ["mistral"],
             "endpoint": "/api/generate",
             "attempted_endpoints": ["/api/chat", "/api/generate"],
             "request_timeout_s": 90.0,
             "transport": "http",
             "cli_fallback_enabled": True,
-            "cli_error": "ollama CLI not found on PATH.",
+            "cli_error": "\x1b[?25lollama CLI not found on PATH.\x1b[?25h",
         },
         "insights": {
             "summary": "Fallback summary.",
@@ -110,6 +111,7 @@ def test_format_review_diagnose_includes_backend_details():
     assert "Transport: http" in text
     assert "Attempted endpoints: /api/chat, /api/generate" in text
     assert "Attempted models: ministral:latest, ministral-3:latest" in text
+    assert "Local models: mistral" in text
     assert "CLI fallback enabled: yes" in text
     assert "CLI fallback error: ollama CLI not found on PATH." in text
     assert "Timeout: 90.0s" in text
